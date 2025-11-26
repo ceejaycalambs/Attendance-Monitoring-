@@ -1,4 +1,20 @@
 @tailwind base;
+
+/* html5-qrcode scanner styles */
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+#qr-reader__scan_region {
+  min-height: 300px;
+}
+
+#qr-reader__dashboard {
+  display: none !important;
+}
 @tailwind components;
 @tailwind utilities;
 

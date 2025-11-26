@@ -143,7 +143,11 @@ const Scanner = () => {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <div className="relative bg-primary/5 aspect-square max-w-md mx-auto">
-              <div id="qr-reader" className={scanning ? "block" : "hidden"} />
+              <div 
+                id="qr-reader" 
+                className={`w-full h-full ${scanning ? "block" : "hidden"}`}
+                style={{ minHeight: "300px" }}
+              />
 
               {!scanning && !scanResult && (
                 <div className="absolute inset-0 flex items-center justify-center">
