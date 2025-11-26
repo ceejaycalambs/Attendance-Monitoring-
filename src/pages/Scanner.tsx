@@ -5,7 +5,9 @@ import { ScanLine, CheckCircle, XCircle, Camera } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { mockStudents, mockEvents, mockAttendance } from "@/data/mockData";
+import { useActiveEvent } from "@/hooks/useEvents";
+import { useRecordAttendance } from "@/hooks/useAttendance";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface ScanResult {
@@ -23,7 +25,9 @@ const Scanner = () => {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
-  const activeEvent = mockEvents.find((e) => e.status === "active");
+
+  const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
+  const recordAttendance = useRecordAttendance();
 
   useEffect(() => {
     return () => {
@@ -68,50 +72,49 @@ const Scanner = () => {
     }
   };
 
-  const handleScan = (qrCode: string) => {
-    const student = mockStudents.find((s) => s.qrCode === qrCode);
+  const handleScan = async (qrCode: string) => {
+    if (!activeEvent) {
+      toast.error("No active event");
+      return;
+    }
 
-    if (!student) {
+    // Look up student by QR code
+    const { data: student, error } = await supabase
+      .from("students")
+      .select("*")
+      .eq("qr_code", qrCode)
+      .maybeSingle();
+
+    if (error || !student) {
       setScanResult({
         success: false,
         message: "Invalid QR Code. Student not found in database.",
       });
       toast.error("Invalid QR Code");
+      setTimeout(() => setScanResult(null), 5000);
       return;
     }
 
-    const existingRecord = mockAttendance.find(
-      (a) => a.studentId === student.id && a.eventId === activeEvent?.id && a.status === "present"
-    );
+    // Record attendance
+    const result = await recordAttendance.mutateAsync({
+      studentId: student.id,
+      eventId: activeEvent.id,
+    });
 
-    if (existingRecord) {
-      // Mark time out
-      setScanResult({
-        success: true,
-        student: {
-          name: student.name,
-          studentId: student.studentId,
-          department: student.department,
-          program: student.program,
-        },
-        message: "Time Out Recorded",
-      });
-      toast.success(`${student.name} - Time Out Recorded`);
-    } else {
-      // Mark time in
-      setScanResult({
-        success: true,
-        student: {
-          name: student.name,
-          studentId: student.studentId,
-          department: student.department,
-          program: student.program,
-        },
-        message: "Time In Recorded",
-      });
-      toast.success(`${student.name} - Time In Recorded`);
-    }
+    const message = result.action === "time_in" ? "Time In Recorded" : "Time Out Recorded";
 
+    setScanResult({
+      success: true,
+      student: {
+        name: student.name,
+        studentId: student.student_id,
+        department: student.department,
+        program: student.program,
+      },
+      message,
+    });
+
+    toast.success(`${student.name} - ${message}`);
     setTimeout(() => setScanResult(null), 5000);
   };
 
@@ -129,7 +132,8 @@ const Scanner = () => {
               QR Code Scanner
             </CardTitle>
             <CardDescription>
-              Scan student IDs to record attendance for: <strong>{activeEvent?.name || "No active event"}</strong>
+              Scan student IDs to record attendance for:{" "}
+              <strong>{eventLoading ? "Loading..." : activeEvent?.name || "No active event"}</strong>
             </CardDescription>
           </CardHeader>
         </Card>
@@ -143,8 +147,8 @@ const Scanner = () => {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <div className="relative bg-primary/5 aspect-square max-w-md mx-auto">
-              <div 
-                id="qr-reader" 
+              <div
+                id="qr-reader"
                 className={`w-full h-full ${scanning ? "block" : "hidden"}`}
                 style={{ minHeight: "300px" }}
               />
@@ -232,9 +236,9 @@ const Scanner = () => {
                 </Button>
               )}
 
-              {!activeEvent && (
+              {!activeEvent && !eventLoading && (
                 <p className="text-sm text-destructive text-center">
-                  No active event. Please activate an event first.
+                  No active event. Please activate an event first in the Events page.
                 </p>
               )}
             </div>
@@ -248,7 +252,7 @@ const Scanner = () => {
         transition={{ duration: 0.5, delay: 0.4 }}
         className="text-center text-sm text-muted-foreground"
       >
-        <p>Demo: Use QR codes like "QR-2021-00123" to test scanning</p>
+        <p>Scan student QR codes (format: QR-XXXX-XXXXX)</p>
       </motion.div>
     </div>
   );
