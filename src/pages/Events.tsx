@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CalendarPlus, Calendar, Play, CheckCircle, Clock } from "lucide-react";
+import { CalendarPlus, Calendar, Play, CheckCircle, Clock, History } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEvents, useCreateEvent, useUpdateEventStatus, Event } from "@/hooks/useEvents";
 import { format } from "date-fns";
 
@@ -19,6 +20,7 @@ const statusConfig: Record<Event["status"], { label: string; icon: React.Element
 
 const Events = () => {
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("all");
   const [formData, setFormData] = useState({
     name: "",
     date: "",
@@ -28,6 +30,14 @@ const Events = () => {
   const { data: events, isLoading } = useEvents();
   const createEvent = useCreateEvent();
   const updateStatus = useUpdateEventStatus();
+
+  const filteredEvents = events?.filter((event) => {
+    if (activeTab === "all") return true;
+    if (activeTab === "active") return event.status === "active";
+    if (activeTab === "scheduled") return event.status === "scheduled";
+    if (activeTab === "history") return event.status === "completed";
+    return true;
+  }) || [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,18 +139,45 @@ const Events = () => {
       >
         <Card>
           <CardHeader>
-            <CardTitle>All Events</CardTitle>
+            <CardTitle>Events</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading events...</div>
-            ) : !events?.length ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No events found. Create your first event to get started.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {events?.map((event, index) => {
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all" className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="active" className="flex items-center gap-1">
+                  <Play className="h-3 w-3" />
+                  Active
+                </TabsTrigger>
+                <TabsTrigger value="scheduled" className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Scheduled
+                </TabsTrigger>
+                <TabsTrigger value="history" className="flex items-center gap-1">
+                  <History className="h-3 w-3" />
+                  History
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value={activeTab} className="mt-4">
+                {isLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading events...</div>
+                ) : !filteredEvents.length ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {activeTab === "history" 
+                      ? "No completed events yet."
+                      : activeTab === "active"
+                      ? "No active events. Start a scheduled event to begin tracking attendance."
+                      : activeTab === "scheduled"
+                      ? "No scheduled events. Create a new event to get started."
+                      : "No events found. Create your first event to get started."}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredEvents.map((event, index) => {
                   const config = statusConfig[event.status];
                   const StatusIcon = config.icon;
 
@@ -196,10 +233,12 @@ const Events = () => {
                         </CardContent>
                       </Card>
                     </motion.div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </motion.div>
