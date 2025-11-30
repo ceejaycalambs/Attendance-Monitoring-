@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
+import RegisterQR from "./pages/RegisterQR";
 import Dashboard from "./pages/Dashboard";
 import Scanner from "./pages/Scanner";
 import Attendance from "./pages/Attendance";
@@ -26,6 +27,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Login />} />
+            <Route path="/register-qr" element={<RegisterQR />} />
             <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
             <Route path="/scanner" element={<Layout><Scanner /></Layout>} />
             <Route path="/attendance" element={<Layout><Attendance /></Layout>} />
