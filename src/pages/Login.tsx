@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Shield, AlertCircle } from "lucide-react";
+import { Shield, AlertCircle, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -110,7 +111,7 @@ const Login = () => {
 
         {/* Form */}
         {role === "register" ? (
-          <form onSubmit={handleStudentAuth} className="space-y-6">
+          <div className="space-y-6">
             {/* Role Selection Toggle */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-white">
@@ -134,81 +135,28 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Auth Type Toggle */}
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm text-success hover:underline"
-              >
-                {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-              </button>
-            </div>
-
-            {/* Name Field (Sign Up Only) */}
-            {isSignUp && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">
-                  Your Name
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Juan Dela Cruz"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="bg-white text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
-            )}
-
-            {/* Email Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-white">
-                Email Address *
-              </label>
-              <Input
-                type="email"
-                placeholder="student@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-white text-foreground placeholder:text-muted-foreground"
-                required
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-white">
-                Password *
-              </label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-white text-foreground"
-                required
-                minLength={6}
-              />
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <Alert variant="destructive" className="bg-destructive/20 border-destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full bg-success hover:bg-success/90 text-white font-semibold py-6 text-base"
-              disabled={loading || !email || !password}
-            >
-              {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
-            </Button>
-          </form>
+            {/* Information Card */}
+            <Card className="bg-accent/5 border-accent/20">
+              <CardContent className="pt-6">
+                <div className="space-y-4 text-center">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Register Your QR Code</h3>
+                    <p className="text-sm text-muted-foreground">
+                      No account needed! Just fill in your student information and get your QR code instantly.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => navigate("/register-qr")}
+                    className="w-full bg-success hover:bg-success/90 text-white font-semibold py-6 text-base"
+                  >
+                    <QrCode className="mr-2 h-5 w-5" />
+                    Generate My QR Code
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <form onSubmit={handleOfficerPin} className="space-y-6">
             {/* Role Selection Toggle */}
