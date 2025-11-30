@@ -1,36 +1,80 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { FileText, Download, FileSpreadsheet } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockEvents, mockAttendance, mockStudents } from "@/data/mockData";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { useEvents } from "@/hooks/useEvents";
+import { supabase } from "@/integrations/supabase/client";
 
 const Reports = () => {
-  const [selectedEvent, setSelectedEvent] = useState(mockEvents[0]?.id || "");
+  const [selectedEvent, setSelectedEvent] = useState("");
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  const { data: events } = useEvents();
+
+  useEffect(() => {
+    if (events && events.length > 0 && !selectedEvent) {
+      setSelectedEvent(events[0].id);
+    }
+  }, [events]);
+
+  useEffect(() => {
+    if (selectedEvent) {
+      fetchAttendanceData();
+    }
+  }, [selectedEvent]);
+
+  const fetchAttendanceData = async () => {
+    if (!selectedEvent) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("attendance_records")
+        .select(`
+          *,
+          students (
+            name,
+            student_id,
+            department,
+            program
+          )
+        `)
+        .eq("event_id", selectedEvent)
+        .order("time_in", { ascending: true });
+
+      if (error) throw error;
+      setAttendanceData(data || []);
+    } catch (error: any) {
+      console.error("Error fetching attendance:", error);
+      toast.error("Failed to load attendance data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const exportToPDF = () => {
-    const event = mockEvents.find((e) => e.id === selectedEvent);
-    if (!event) return;
+    const event = events?.find((e) => e.id === selectedEvent);
+    if (!event || !attendanceData.length) {
+      toast.error("No data to export");
+      return;
+    }
 
-    const attendanceRecords = mockAttendance
-      .filter((a) => a.eventId === selectedEvent)
-      .map((a) => {
-        const student = mockStudents.find((s) => s.id === a.studentId);
-        return {
-          name: student?.name || "",
-          studentId: student?.studentId || "",
-          department: student?.department || "",
-          program: student?.program || "",
-          timeIn: a.timeIn.toLocaleTimeString(),
-          timeOut: a.timeOut ? a.timeOut.toLocaleTimeString() : "-",
-          status: a.status,
-        };
-      });
+    const attendanceRecords = attendanceData.map((a) => ({
+      name: a.students?.name || "",
+      studentId: a.students?.student_id || "",
+      department: a.students?.department || "",
+      program: a.students?.program || "",
+      timeIn: new Date(a.time_in).toLocaleTimeString(),
+      timeOut: a.time_out ? new Date(a.time_out).toLocaleTimeString() : "-",
+      status: a.status,
+    }));
 
     const doc = new jsPDF();
 
@@ -42,7 +86,7 @@ const Reports = () => {
     doc.setFontSize(12);
     doc.setTextColor(100, 100, 100);
     doc.text(`Event: ${event.name}`, 14, 30);
-    doc.text(`Date: ${event.date.toLocaleDateString()}`, 14, 37);
+    doc.text(`Date: ${new Date(event.date).toLocaleDateString()}`, 14, 37);
     doc.text(`Total Attendees: ${attendanceRecords.length}`, 14, 44);
 
     // Table
@@ -67,23 +111,21 @@ const Reports = () => {
   };
 
   const exportToExcel = () => {
-    const event = mockEvents.find((e) => e.id === selectedEvent);
-    if (!event) return;
+    const event = events?.find((e) => e.id === selectedEvent);
+    if (!event || !attendanceData.length) {
+      toast.error("No data to export");
+      return;
+    }
 
-    const attendanceRecords = mockAttendance
-      .filter((a) => a.eventId === selectedEvent)
-      .map((a) => {
-        const student = mockStudents.find((s) => s.id === a.studentId);
-        return {
-          "Student Name": student?.name || "",
-          "Student ID": student?.studentId || "",
-          Department: student?.department || "",
-          Program: student?.program || "",
-          "Time In": a.timeIn.toLocaleTimeString(),
-          "Time Out": a.timeOut ? a.timeOut.toLocaleTimeString() : "-",
-          Status: a.status,
-        };
-      });
+    const attendanceRecords = attendanceData.map((a) => ({
+      "Student Name": a.students?.name || "",
+      "Student ID": a.students?.student_id || "",
+      Department: a.students?.department || "",
+      Program: a.students?.program || "",
+      "Time In": new Date(a.time_in).toLocaleTimeString(),
+      "Time Out": a.time_out ? new Date(a.time_out).toLocaleTimeString() : "-",
+      Status: a.status,
+    }));
 
     const worksheet = XLSX.utils.json_to_sheet(attendanceRecords);
     const workbook = XLSX.utils.book_new();
@@ -94,7 +136,7 @@ const Reports = () => {
       worksheet,
       [
         [`Event: ${event.name}`],
-        [`Date: ${event.date.toLocaleDateString()}`],
+        [`Date: ${new Date(event.date).toLocaleDateString()}`],
         [`Total Attendees: ${attendanceRecords.length}`],
         [],
       ],
@@ -105,8 +147,8 @@ const Reports = () => {
     toast.success("Excel file exported successfully");
   };
 
-  const selectedEventData = mockEvents.find((e) => e.id === selectedEvent);
-  const attendanceCount = mockAttendance.filter((a) => a.eventId === selectedEvent).length;
+  const selectedEventData = events?.find((e) => e.id === selectedEvent);
+  const attendanceCount = attendanceData.length;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -137,9 +179,9 @@ const Reports = () => {
                 <SelectValue placeholder="Select an event" />
               </SelectTrigger>
               <SelectContent>
-                {mockEvents.map((event) => (
+                {events?.map((event) => (
                   <SelectItem key={event.id} value={event.id}>
-                    {event.name} - {event.date.toLocaleDateString()}
+                    {event.name} - {new Date(event.date).toLocaleDateString()} ({event.status})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -157,7 +199,7 @@ const Reports = () => {
                   <CardContent className="pt-6">
                     <p className="text-sm text-muted-foreground">Date & Time</p>
                     <p className="text-lg font-semibold">
-                      {selectedEventData.date.toLocaleDateString()}
+                      {new Date(selectedEventData.date).toLocaleDateString()}
                     </p>
                   </CardContent>
                 </Card>
