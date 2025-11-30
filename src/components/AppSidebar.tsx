@@ -1,4 +1,4 @@
-import { LayoutDashboard, ScanLine, Users, FileText, LogOut, UserPlus, Calendar } from "lucide-react";
+import { LayoutDashboard, ScanLine, Users, FileText, LogOut, UserPlus, Calendar, QrCode } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "My QR Code", url: "/my-qr", icon: QrCode },
   { title: "Scan ID", url: "/scanner", icon: ScanLine },
   { title: "Students", url: "/students", icon: UserPlus },
   { title: "Events", url: "/events", icon: Calendar },

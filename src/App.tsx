@@ -12,6 +12,7 @@ import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
 import Students from "./pages/Students";
 import Events from "./pages/Events";
+import MyQRCode from "./pages/MyQRCode";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/reports" element={<Layout><Reports /></Layout>} />
             <Route path="/students" element={<Layout><Students /></Layout>} />
             <Route path="/events" element={<Layout><Events /></Layout>} />
+            <Route path="/my-qr" element={<Layout><MyQRCode /></Layout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
