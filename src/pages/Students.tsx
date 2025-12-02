@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { UserPlus, Users, Search, QrCode } from "lucide-react";
+import { UserPlus, Users, Search, QrCode, Trash2, Edit, Download } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStudents, useCreateStudent, Student } from "@/hooks/useStudents";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, Student } from "@/hooks/useStudents";
 import { HashTable } from "@/utils/dataStructures/HashTable";
-import { mergeSort, quickSort } from "@/utils/algorithms/Sorting";
-import { binarySearch, binarySearchContains } from "@/utils/algorithms/BinarySearch";
+import { mergeSort } from "@/utils/algorithms/Sorting";
+import { useAuth } from "@/contexts/AuthContext";
+import QRCodeLib from "qrcode";
+import { toast } from "sonner";
 
 const DEPARTMENTS = [
   "Engineering",
@@ -32,7 +35,12 @@ const PROGRAMS: Record<string, string[]> = {
 };
 
 const Students = () => {
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "super_admin";
   const [open, setOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "student_id" | "department">("name");
   const [formData, setFormData] = useState({
@@ -41,9 +49,15 @@ const Students = () => {
     department: "",
     program: "",
   });
+  const [editFormData, setEditFormData] = useState({
+    student_id: "",
+  });
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
   const { data: students, isLoading } = useStudents();
   const createStudent = useCreateStudent();
+  const updateStudent = useUpdateStudent();
+  const deleteStudent = useDeleteStudent();
 
   // Create HashTable for O(1) lookups by QR code and Student ID
   const studentHashTable = useMemo(() => {
@@ -106,6 +120,86 @@ const Students = () => {
     await createStudent.mutateAsync(formData);
     setFormData({ name: "", student_id: "", department: "", program: "" });
     setOpen(false);
+  };
+
+  const handleCardClick = (student: Student) => {
+    if (!isSuperAdmin) return;
+    setSelectedStudent(student);
+    setEditFormData({ student_id: student.student_id });
+    generateQRCode(student.qr_code);
+    setEditDialogOpen(true);
+  };
+
+  const generateQRCode = async (qrText: string) => {
+    try {
+      const url = await QRCodeLib.toDataURL(qrText, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#ffffff",
+        },
+      });
+      setQrDataUrl(url);
+    } catch (error) {
+      console.error("Error generating QR code:", error);
+    }
+  };
+
+  const handleUpdateStudent = async () => {
+    if (!selectedStudent) return;
+    
+    if (editFormData.student_id === selectedStudent.student_id) {
+      toast.info("Student ID unchanged");
+      return;
+    }
+
+    if (!editFormData.student_id.trim()) {
+      toast.error("Student ID cannot be empty");
+      return;
+    }
+
+    try {
+      const updatedStudent = await updateStudent.mutateAsync({
+        id: selectedStudent.id,
+        student_id: editFormData.student_id,
+      });
+      
+      // Regenerate QR code with new student ID
+      const newQrCode = `QR-${editFormData.student_id}`;
+      await generateQRCode(newQrCode);
+      
+      // Update selected student with new data
+      if (updatedStudent) {
+        setSelectedStudent(updatedStudent);
+      }
+      toast.success("Student ID updated and QR code regenerated!");
+    } catch (error) {
+      console.error("Error updating student:", error);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!selectedStudent) return;
+    
+    try {
+      await deleteStudent.mutateAsync(selectedStudent.id);
+      setDeleteDialogOpen(false);
+      setEditDialogOpen(false);
+      setSelectedStudent(null);
+    } catch (error) {
+      console.error("Error deleting student:", error);
+    }
+  };
+
+  const downloadQRCode = () => {
+    if (!qrDataUrl || !selectedStudent) return;
+
+    const link = document.createElement("a");
+    link.download = `${selectedStudent.qr_code}.png`;
+    link.href = qrDataUrl;
+    link.click();
+    toast.success("QR Code downloaded!");
   };
 
   return (
@@ -252,13 +346,15 @@ const Students = () => {
             </p>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {isLoading && (
               <div className="text-center py-8 text-muted-foreground">Loading students...</div>
-            ) : !filteredStudents?.length ? (
+            )}
+            {!isLoading && !filteredStudents?.length && (
               <div className="text-center py-8 text-muted-foreground">
                 No students found. Add your first student to get started.
               </div>
-            ) : (
+            )}
+            {!isLoading && filteredStudents && filteredStudents.length > 0 && (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredStudents?.map((student, index) => (
                   <motion.div
@@ -267,20 +363,39 @@ const Students = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                   >
-                    <Card className="hover:shadow-lg transition-shadow">
+                    <Card 
+                      className={`hover:shadow-lg transition-shadow ${isSuperAdmin ? "cursor-pointer hover:border-[#1a7a3e]" : ""}`}
+                      onClick={() => handleCardClick(student)}
+                    >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
-                          <div className="space-y-1">
+                          <div className="space-y-1 flex-1">
                             <h3 className="font-semibold">{student.name}</h3>
                             <p className="text-sm text-muted-foreground">{student.student_id}</p>
-                            <p className="text-xs text-muted-foreground">{student.department}</p>
-                            <p className="text-xs text-muted-foreground">{student.program}</p>
+                            <p className="text-xs text-muted-foreground">{student.department || "Not Set"}</p>
+                            <p className="text-xs text-muted-foreground">{student.program || "Not Set"}</p>
                           </div>
                           <Badge variant="outline" className="flex items-center gap-1">
                             <QrCode className="h-3 w-3" />
                             {student.qr_code}
                           </Badge>
                         </div>
+                        {isSuperAdmin && (
+                          <div className="mt-3 pt-3 border-t flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 text-[#1a7a3e] border-[#1a7a3e] hover:bg-[#1a7a3e] hover:text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCardClick(student);
+                              }}
+                            >
+                              <Edit className="h-3 w-3 mr-1" />
+                              View/Edit
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </motion.div>
@@ -290,6 +405,147 @@ const Students = () => {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Student Details Dialog */}
+      {isSuperAdmin && selectedStudent && (
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-[#1a7a3e]">
+                <UserPlus className="h-5 w-5" />
+                Student Details
+              </DialogTitle>
+              <DialogDescription>
+                View and edit student information. Updating student ID will regenerate the QR code.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Student Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Student Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
+                    <p className="text-lg font-semibold">{selectedStudent.name}</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="edit-student-id" className="text-sm font-medium">Student ID *</Label>
+                    <Input
+                      id="edit-student-id"
+                      value={editFormData.student_id}
+                      onChange={async (e) => {
+                        const newId = e.target.value;
+                        setEditFormData({ student_id: newId });
+                        // Preview new QR code if ID changed
+                        if (newId && newId !== selectedStudent.student_id) {
+                          const previewQrCode = `QR-${newId}`;
+                          await generateQRCode(previewQrCode).catch(console.error);
+                        }
+                      }}
+                      className="mt-1"
+                      placeholder="2024-00001"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      New QR Code will be: QR-{editFormData.student_id || "XXXX-XXXXX"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Department</Label>
+                    <p className="text-base">{selectedStudent.department || "Not Set"}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Program</Label>
+                    <p className="text-base">{selectedStudent.program || "Not Set"}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Current QR Code</Label>
+                    <Badge variant="outline" className="mt-1">
+                      <QrCode className="h-3 w-3 mr-1" />
+                      {selectedStudent.qr_code}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* QR Code Display */}
+              {qrDataUrl && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <QrCode className="h-5 w-5 text-[#1a7a3e]" />
+                      QR Code
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-center bg-white p-6 rounded-lg border">
+                      <img src={qrDataUrl} alt="Student QR Code" className="w-64 h-64" />
+                    </div>
+                    <Button
+                      onClick={downloadQRCode}
+                      className="w-full bg-[#1a7a3e] hover:bg-[#155a2e] text-white"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download QR Code
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleUpdateStudent}
+                  className="flex-1 bg-[#1a7a3e] hover:bg-[#155a2e] text-white"
+                  disabled={updateStudent.isPending || !editFormData.student_id || editFormData.student_id === selectedStudent.student_id}
+                >
+                  {updateStudent.isPending ? "Updating..." : "Update Student ID"}
+                </Button>
+                
+                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the student
+                        "{selectedStudent.name}" and all associated attendance records.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteStudent}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

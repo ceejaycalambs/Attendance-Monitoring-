@@ -49,7 +49,7 @@ const RegisterQR = () => {
         width: 500,
         margin: 2,
         color: {
-          dark: "#1a7a3e",
+          dark: "#000000",
           light: "#ffffff",
         },
       });
@@ -112,18 +112,6 @@ const RegisterQR = () => {
     link.href = qrDataUrl;
     link.click();
     toast.success("QR Code downloaded!");
-  };
-
-  const resetForm = () => {
-    setStep("form");
-    setFormData({
-      name: "",
-      student_id: "",
-      department: "",
-      program: "",
-    });
-    setQrDataUrl("");
-    setGeneratedQRCode("");
   };
 
   return (
@@ -325,13 +313,6 @@ const RegisterQR = () => {
                 >
                   <Download className="mr-2 h-5 w-5" />
                   Download QR Code
-                </Button>
-                <Button
-                  onClick={resetForm}
-                  variant="outline"
-                  className="w-full py-6 text-base border-2 border-[#1a7a3e] text-[#1a7a3e] hover:bg-[#1a7a3e] hover:text-white"
-                >
-                  Register Another Student
                 </Button>
                 <Button
                   variant="ghost"

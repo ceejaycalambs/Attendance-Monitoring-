@@ -21,7 +21,23 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <SidebarTrigger className="mr-4" />
               <div className="flex items-center gap-3">
-                <Shield className="h-6 w-6 text-success" />
+                <img 
+                  src="/snsu-logo.png" 
+                  alt="SNSU Logo" 
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    // Fallback to shield if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallback = target.parentElement?.querySelector('.fallback-icon');
+                    if (fallback) {
+                      (fallback as HTMLElement).style.display = 'flex';
+                    }
+                  }}
+                />
+                <div className="fallback-icon hidden items-center justify-center">
+                  <Shield className="h-6 w-6 text-success" />
+                </div>
                 <div>
                   <h1 className="text-lg font-bold text-foreground">ID-SCAN System</h1>
                   <p className="text-xs text-muted-foreground">Secure Event Attendance Tracking</p>

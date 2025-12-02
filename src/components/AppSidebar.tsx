@@ -42,6 +42,11 @@ export function AppSidebar() {
     navigate("/");
   };
 
+  // Filter out "My QR Code" for super admins
+  const filteredItems = isSuperAdmin 
+    ? items.filter(item => item.title !== "My QR Code")
+    : items;
+
   return (
     <Sidebar className={`${open ? "w-60" : "w-14"} bg-white border-r border-border`} collapsible="icon">
       <SidebarContent className="bg-white">
@@ -62,13 +67,13 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-muted-foreground">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
                       end
-                      className="hover:bg-[#1a7a3e]/10 hover:text-[#1a7a3e] text-foreground transition-colors"
+                      className="hover:bg-[#1a7a3e]/15 hover:text-[#1a7a3e] text-foreground transition-colors font-medium"
                       activeClassName="bg-[#1a7a3e] text-white font-semibold border-l-4 border-[#1a7a3e]"
                     >
                       <item.icon className="h-4 w-4" />

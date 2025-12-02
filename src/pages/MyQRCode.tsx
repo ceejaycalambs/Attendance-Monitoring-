@@ -103,7 +103,7 @@ const MyQRCode = () => {
         width: 400,
         margin: 2,
         color: {
-          dark: "#1e3a8a",
+          dark: "#000000",
           light: "#ffffff",
         },
       });

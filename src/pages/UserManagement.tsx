@@ -124,7 +124,10 @@ ON CONFLICT (user_id, role) DO NOTHING;`}
       if (authError) {
         console.error("Auth error details:", authError);
         // Provide more helpful error messages
-        if (authError.message.includes("already registered") || authError.message.includes("already exists") || authError.message.includes("User already registered")) {
+        if (authError.message.includes("already registered") || 
+            authError.message.includes("already exists") || 
+            authError.message.includes("User already registered") ||
+            authError.message.includes("email address is already")) {
           throw new Error("Already registered");
         }
         if (authError.message.includes("password")) {
@@ -173,6 +176,12 @@ ON CONFLICT (user_id, role) DO NOTHING;`}
 
       if (roleError) {
         console.error("Role assignment error:", roleError);
+        // Check if it's a foreign key constraint error (user already exists)
+        if (roleError.message.includes("foreign key constraint") || 
+            roleError.message.includes("user_roles_user_id_fkey") ||
+            roleError.message.includes("violates foreign key")) {
+          throw new Error("Already registered");
+        }
         throw new Error(`Failed to assign role: ${roleError.message}. Make sure the role enum includes ${formData.role}.`);
       }
 
@@ -201,14 +210,28 @@ ON CONFLICT (user_id, role) DO NOTHING;`}
       
       if (err instanceof Error) {
         errorMessage = err.message;
+        // Check for any indication that user already exists
+        if (errorMessage.includes("foreign key constraint") || 
+            errorMessage.includes("already registered") ||
+            errorMessage.includes("already exists") ||
+            errorMessage.includes("User already registered")) {
+          errorMessage = "Already registered";
+        }
       } else if (typeof err === "object" && err !== null && "message" in err) {
-        errorMessage = String(err.message);
+        const msg = String(err.message);
+        if (msg.includes("foreign key constraint") || 
+            msg.includes("already registered") ||
+            msg.includes("already exists")) {
+          errorMessage = "Already registered";
+        } else {
+          errorMessage = msg;
+        }
       }
       
       console.error("Account creation error:", err);
       setError(errorMessage);
       toast.error(errorMessage, {
-        description: "Check the console for more details",
+        description: errorMessage === "Already registered" ? "This email is already registered in the system" : "Check the console for more details",
         duration: 5000,
       });
     } finally {

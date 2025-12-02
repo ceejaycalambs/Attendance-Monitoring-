@@ -33,6 +33,8 @@ const Scanner = () => {
   const [scanQueue] = useState(() => new Queue<string>()); // Queue for managing scan operations
   const [timePeriod, setTimePeriod] = useState<"morning" | "afternoon">("morning");
   const [actionType, setActionType] = useState<"time_in" | "time_out">("time_in");
+  const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
   const { data: students } = useStudents();
@@ -69,10 +71,21 @@ const Scanner = () => {
           fps: 10,
           qrbox: { width: 250, height: 250 },
         },
-        (decodedText) => {
-          handleScan(decodedText);
-          qrCodeScanner.stop();
-          setScanning(false);
+        async (decodedText) => {
+          // Prevent duplicate scans within 2 seconds
+          if (decodedText === lastScannedCode || isProcessing) {
+            return;
+          }
+          
+          setIsProcessing(true);
+          setLastScannedCode(decodedText);
+          await handleScan(decodedText);
+          
+          // Reset after 2 seconds to allow scanning the same code again
+          setTimeout(() => {
+            setLastScannedCode("");
+            setIsProcessing(false);
+          }, 2000);
         },
         () => {
           // Error callback - ignore scan errors
@@ -119,7 +132,7 @@ const Scanner = () => {
           message: "Invalid QR Code. Student not found in database.",
         });
         toast.error("Invalid QR Code");
-        setTimeout(() => setScanResult(null), 5000);
+        setTimeout(() => setScanResult(null), 3000);
         scanQueue.dequeue(); // Remove from queue
         return;
       }
@@ -163,7 +176,8 @@ const Scanner = () => {
     });
 
     toast.success(`${student.name} - ${message}`);
-    setTimeout(() => setScanResult(null), 5000);
+    // Auto-hide result after 3 seconds, but keep scanner running
+    setTimeout(() => setScanResult(null), 3000);
   };
 
   return (
@@ -230,7 +244,7 @@ const Scanner = () => {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    className="absolute inset-0 flex items-center justify-center bg-background/95"
+                    className="absolute inset-0 flex items-center justify-center bg-background/95 backdrop-blur-sm z-10"
                   >
                     <div className="text-center space-y-4 p-6">
                       {scanResult.success ? (
@@ -262,6 +276,9 @@ const Scanner = () => {
                           </Badge>
                         </>
                       )}
+                      <p className="text-xs text-muted-foreground mt-4">
+                        Scanner is still active...
+                      </p>
                     </div>
                   </motion.div>
                 )}

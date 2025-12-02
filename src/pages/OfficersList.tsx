@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Users, Shield, Mail, Calendar, User, AlertCircle } from "lucide-react";
+import { Users, Shield, Mail, Calendar, User, AlertCircle, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { mergeSort } from "@/utils/algorithms/Sorting";
 import { HashTable } from "@/utils/dataStructures/HashTable";
@@ -153,6 +155,42 @@ const OfficersList = () => {
     });
   }, [sortedOfficers, filter]);
 
+  const handleDeleteOfficer = async (officerId: string, officerName: string, officerRole: string) => {
+    try {
+      // Delete the officer role from user_roles
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", officerId)
+        .eq("role", officerRole);
+
+      if (roleError) {
+        console.error("Error deleting officer role:", roleError);
+        throw new Error(`Failed to delete officer: ${roleError.message}`);
+      }
+
+      // Also delete from profiles (optional - you can remove this if you want to keep profile data)
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", officerId);
+
+      if (profileError) {
+        console.warn("Could not delete profile:", profileError);
+        // Continue anyway - the role deletion is what matters
+      }
+
+      toast.success(`Officer ${officerName} has been removed`);
+      
+      // Refresh the list
+      await fetchOfficers();
+    } catch (error) {
+      console.error("Error deleting officer:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete officer";
+      toast.error(errorMessage);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <motion.div
@@ -247,7 +285,7 @@ const OfficersList = () => {
                         </div>
                       </div>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-3">
                       <span className={`px-3 py-1 rounded text-xs font-semibold ${
                         officer.role === "rotc_officer"
                           ? "bg-blue-100 text-blue-800"
@@ -255,6 +293,38 @@ const OfficersList = () => {
                       }`}>
                         {officer.role === "rotc_officer" ? "ROTC Staff" : "USC Council"}
                       </span>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Officer?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete <strong>{officer.name}</strong> ({officer.email})?
+                              <br />
+                              <br />
+                              This will remove their officer role and they will no longer be able to access the scanner.
+                              This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteOfficer(officer.id, officer.name, officer.role)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 ))}
