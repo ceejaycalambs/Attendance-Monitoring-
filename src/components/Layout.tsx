@@ -14,16 +14,16 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 shadow-sm">
             <div className="flex items-center">
               <SidebarTrigger className="mr-4" />
               <div className="flex items-center gap-3">
-                <Shield className="h-6 w-6 text-primary" />
+                <Shield className="h-6 w-6 text-success" />
                 <div>
-                  <h1 className="text-lg font-bold text-primary">ID-SCAN System</h1>
+                  <h1 className="text-lg font-bold text-foreground">ID-SCAN System</h1>
                   <p className="text-xs text-muted-foreground">Secure Event Attendance Tracking</p>
                 </div>
               </div>
@@ -38,7 +38,7 @@ export function Layout({ children }: LayoutProps) {
               Logout
             </Button>
           </header>
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-6 overflow-auto bg-background">
             {children}
           </main>
         </div>

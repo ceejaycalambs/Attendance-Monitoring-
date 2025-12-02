@@ -68,11 +68,11 @@ const Events = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Card className="border-l-4 border-l-accent">
+        <Card className="border-l-4 border-l-success">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-6 w-6 text-accent" />
+                <Calendar className="h-6 w-6 text-success" />
                 Event Management
               </CardTitle>
               <CardDescription>
@@ -81,7 +81,7 @@ const Events = () => {
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90">
+                <Button className="bg-success hover:bg-success/90 text-white">
                   <CalendarPlus className="mr-2 h-4 w-4" />
                   Create Event
                 </Button>
@@ -199,13 +199,13 @@ const Events = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                     >
-                      <Card className={`${event.status === "active" ? "border-accent shadow-glow" : ""}`}>
+                      <Card className={`${event.status === "active" ? "border-success shadow-glow bg-success/5" : ""}`}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <h3 className="font-semibold text-lg">{event.name}</h3>
-                                <Badge variant={config.variant} className="flex items-center gap-1">
+                                <Badge variant={config.variant} className={`flex items-center gap-1 ${event.status === "active" ? "bg-success text-white" : ""}`}>
                                   <StatusIcon className="h-3 w-3" />
                                   {config.label}
                                 </Badge>

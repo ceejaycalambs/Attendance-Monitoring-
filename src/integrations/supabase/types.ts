@@ -23,6 +23,7 @@ export type Database = {
           student_id: string
           time_in: string
           time_out: string | null
+          time_period: string | null
         }
         Insert: {
           created_at?: string
@@ -32,6 +33,7 @@ export type Database = {
           student_id: string
           time_in?: string
           time_out?: string | null
+          time_period?: string | null
         }
         Update: {
           created_at?: string
@@ -41,6 +43,7 @@ export type Database = {
           student_id?: string
           time_in?: string
           time_out?: string | null
+          time_period?: string | null
         }
         Relationships: [
           {

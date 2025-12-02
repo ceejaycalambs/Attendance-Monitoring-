@@ -115,11 +115,11 @@ const Students = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Card className="border-l-4 border-l-accent">
+        <Card className="border-l-4 border-l-success">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-6 w-6 text-accent" />
+                <Users className="h-6 w-6 text-success" />
                 Student Management
               </CardTitle>
               <CardDescription>
@@ -128,7 +128,7 @@ const Students = () => {
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90">
+                <Button className="bg-success hover:bg-success/90 text-white">
                   <UserPlus className="mr-2 h-4 w-4" />
                   Add Student
                 </Button>

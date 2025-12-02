@@ -55,12 +55,12 @@ const Dashboard = () => {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-primary">Command Center</h1>
+            <h1 className="text-3xl font-bold text-foreground">Command Center</h1>
             <p className="text-muted-foreground">Welcome back, {staffName}</p>
           </div>
           <Button
             onClick={() => navigate("/scanner")}
-            className="bg-gradient-scan hover:opacity-90 transition-opacity shadow-glow"
+            className="bg-success hover:bg-success/90 text-white shadow-glow"
           >
             Start Scanning
           </Button>
@@ -75,7 +75,7 @@ const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
           >
-            <Card className="border-l-4 border-l-accent shadow-sm hover:shadow-md transition-shadow">
+            <Card className="border-l-4 border-l-success shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
@@ -85,7 +85,7 @@ const Dashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-2xl font-bold text-foreground">{stat.value}</div>
               </CardContent>
             </Card>
           </motion.div>
@@ -99,17 +99,17 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <Card className="border-l-4 border-l-accent">
+          <Card className="border-l-4 border-l-success">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-accent" />
+                <Shield className="h-5 w-5 text-success" />
                 Super Admin Panel
               </CardTitle>
               <CardDescription>Manage officer accounts and system settings</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-accent/5">
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-success/5">
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground flex items-center gap-2">
                       <UserPlus className="h-4 w-4" />
@@ -121,7 +121,7 @@ const Dashboard = () => {
                   </div>
                   <Button
                     onClick={() => navigate("/user-management")}
-                    className="bg-accent hover:bg-accent/90"
+                    className="bg-success hover:bg-success/90 text-white"
                   >
                     Manage Users
                   </Button>
@@ -147,7 +147,7 @@ const Dashboard = () => {
               {mockEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:border-accent transition-colors"
+                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:border-success/50 transition-colors bg-success/5"
                 >
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground">{event.name}</h3>

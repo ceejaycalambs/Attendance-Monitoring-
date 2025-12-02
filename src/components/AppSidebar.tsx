@@ -1,6 +1,6 @@
 import { LayoutDashboard, ScanLine, Users, FileText, LogOut, UserPlus, Calendar, QrCode, Shield, Key } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -33,13 +33,9 @@ const adminItems = [
 
 export function AppSidebar() {
   const { open } = useSidebar();
-  const location = useLocation();
   const navigate = useNavigate();
   const { userRole, signOut } = useAuth();
-  const currentPath = location.pathname;
   const isSuperAdmin = userRole === "super_admin";
-
-  const isActive = (path: string) => currentPath === path;
 
   const handleLogout = async () => {
     await signOut();
@@ -57,7 +53,7 @@ export function AppSidebar() {
             </div>
           ) : (
             <div className="flex justify-center">
-              <ScanLine className="h-6 w-6 text-sidebar-primary" />
+              <ScanLine className="h-6 w-6 text-success" />
             </div>
           )}
         </div>
@@ -73,7 +69,7 @@ export function AppSidebar() {
                       to={item.url}
                       end
                       className="hover:bg-sidebar-accent transition-colors"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                      activeClassName="bg-success/20 text-success font-semibold border-l-4 border-success"
                     >
                       <item.icon className="h-4 w-4" />
                       {open && <span>{item.title}</span>}
@@ -97,7 +93,7 @@ export function AppSidebar() {
                         to={item.url}
                         end
                         className="hover:bg-sidebar-accent transition-colors"
-                        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                        activeClassName="bg-success/20 text-success font-semibold border-l-4 border-success"
                       >
                         <item.icon className="h-4 w-4" />
                         {open && <span>{item.title}</span>}

@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
-import { ScanLine, CheckCircle, XCircle, Camera } from "lucide-react";
+import { ScanLine, CheckCircle, XCircle, Camera, Sun, Moon, LogIn, LogOut } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useActiveEvent } from "@/hooks/useEvents";
 import { useRecordAttendance } from "@/hooks/useAttendance";
 import { useStudents, Student } from "@/hooks/useStudents";
@@ -29,6 +31,8 @@ const Scanner = () => {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
   const [scanQueue] = useState(() => new Queue<string>()); // Queue for managing scan operations
+  const [timePeriod, setTimePeriod] = useState<"morning" | "afternoon">("morning");
+  const [actionType, setActionType] = useState<"time_in" | "time_out">("time_in");
 
   const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
   const { data: students } = useStudents();
@@ -134,13 +138,18 @@ const Scanner = () => {
   const processScan = async (student: Student) => {
     if (!activeEvent) return;
 
-    // Record attendance
-    const result = await recordAttendance.mutateAsync({
+    // Record attendance with time period and explicit action type
+    await recordAttendance.mutateAsync({
       studentId: student.id,
       eventId: activeEvent.id,
+      timePeriod: timePeriod,
+      actionType: actionType,
     });
 
-    const message = result.action === "time_in" ? "Time In Recorded" : "Time Out Recorded";
+    const periodLabel = timePeriod === "morning" ? "AM" : "PM";
+    const message = actionType === "time_in" 
+      ? `${periodLabel} Time In Recorded` 
+      : `${periodLabel} Time Out Recorded`;
 
     setScanResult({
       success: true,
@@ -164,10 +173,10 @@ const Scanner = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Card className="border-l-4 border-l-accent">
+        <Card className="border-l-4 border-l-success">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ScanLine className="h-6 w-6 text-accent" />
+              <ScanLine className="h-6 w-6 text-success" />
               QR Code Scanner
             </CardTitle>
             <CardDescription>
@@ -260,7 +269,90 @@ const Scanner = () => {
             </div>
 
             <div className="p-6 bg-card space-y-4">
-              {!scanning ? (
+              {/* Time Period Selection (AM/PM) */}
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">Select Time Period</Label>
+                <RadioGroup
+                  value={timePeriod}
+                  onValueChange={(value) => setTimePeriod(value as "morning" | "afternoon")}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2 flex-1">
+                    <RadioGroupItem value="morning" id="morning" />
+                    <Label
+                      htmlFor="morning"
+                      className="flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 border-transparent hover:border-primary/20 transition-colors"
+                      style={{
+                        borderColor: timePeriod === "morning" ? "hsl(var(--primary))" : "transparent",
+                        backgroundColor: timePeriod === "morning" ? "hsl(var(--primary) / 0.1)" : "transparent",
+                      }}
+                    >
+                      <Sun className="h-4 w-4" />
+                      <span className="font-medium">AM</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 flex-1">
+                    <RadioGroupItem value="afternoon" id="afternoon" />
+                    <Label
+                      htmlFor="afternoon"
+                      className="flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 border-transparent hover:border-primary/20 transition-colors"
+                      style={{
+                        borderColor: timePeriod === "afternoon" ? "hsl(var(--primary))" : "transparent",
+                        backgroundColor: timePeriod === "afternoon" ? "hsl(var(--primary) / 0.1)" : "transparent",
+                      }}
+                    >
+                      <Moon className="h-4 w-4" />
+                      <span className="font-medium">PM</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Action Type Selection (Time In/Time Out) */}
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">Select Action</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => setActionType("time_in")}
+                    variant={actionType === "time_in" ? "default" : "outline"}
+                    className={`flex items-center gap-2 ${
+                      actionType === "time_in" 
+                        ? "bg-success hover:bg-success/90 text-white" 
+                        : ""
+                    }`}
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Time In
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setActionType("time_out")}
+                    variant={actionType === "time_out" ? "default" : "outline"}
+                    className={`flex items-center gap-2 ${
+                      actionType === "time_out" 
+                        ? "bg-destructive hover:bg-destructive/90 text-white" 
+                        : ""
+                    }`}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Time Out
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  {timePeriod === "morning" ? "AM" : "PM"} - {actionType === "time_in" ? "Time In" : "Time Out"}
+                </p>
+              </div>
+
+              {scanning ? (
+                <Button
+                  onClick={stopScanning}
+                  variant="destructive"
+                  className="w-full text-lg py-6"
+                >
+                  Stop Scanning
+                </Button>
+              ) : (
                 <Button
                   onClick={startScanning}
                   className="w-full bg-gradient-scan hover:opacity-90 transition-opacity shadow-glow text-lg py-6"
@@ -268,14 +360,6 @@ const Scanner = () => {
                 >
                   <Camera className="mr-2 h-5 w-5" />
                   Start Scanning
-                </Button>
-              ) : (
-                <Button
-                  onClick={stopScanning}
-                  variant="destructive"
-                  className="w-full text-lg py-6"
-                >
-                  Stop Scanning
                 </Button>
               )}
 

@@ -9,6 +9,7 @@ export interface AttendanceRecord {
   time_in: string;
   time_out: string | null;
   status: "present" | "left";
+  time_period?: "morning" | "afternoon";
   created_at: string;
   students?: {
     name: string;
@@ -51,22 +52,50 @@ export const useRecordAttendance = () => {
   return useMutation({
     mutationFn: async ({ 
       studentId, 
-      eventId 
+      eventId,
+      timePeriod = "morning",
+      actionType = "time_in"
     }: { 
       studentId: string; 
       eventId: string;
+      timePeriod?: "morning" | "afternoon";
+      actionType?: "time_in" | "time_out";
     }) => {
-      // Check if student already has an active attendance record
-      const { data: existingRecord } = await supabase
-        .from("attendance_records")
-        .select("*")
-        .eq("student_id", studentId)
-        .eq("event_id", eventId)
-        .eq("status", "present")
-        .maybeSingle();
+      if (actionType === "time_in") {
+        // Create new time in record for this period
+        const { data, error } = await supabase
+          .from("attendance_records")
+          .insert({
+            student_id: studentId,
+            event_id: eventId,
+            time_period: timePeriod,
+            status: "present",
+            time_in: new Date().toISOString(),
+          })
+          .select()
+          .single();
 
-      if (existingRecord) {
-        // Mark time out
+        if (error) throw error;
+        return { action: "time_in", data };
+      } else {
+        // Time Out: Find the most recent time in for this period
+        const { data: existingRecord } = await supabase
+          .from("attendance_records")
+          .select("*")
+          .eq("student_id", studentId)
+          .eq("event_id", eventId)
+          .eq("time_period", timePeriod)
+          .eq("status", "present")
+          .is("time_out", null)
+          .order("time_in", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingRecord) {
+          throw new Error(`No active ${timePeriod === "morning" ? "AM" : "PM"} time in found for this student`);
+        }
+
+        // Update with time out
         const { data, error } = await supabase
           .from("attendance_records")
           .update({ 
@@ -79,20 +108,6 @@ export const useRecordAttendance = () => {
 
         if (error) throw error;
         return { action: "time_out", data };
-      } else {
-        // Mark time in
-        const { data, error } = await supabase
-          .from("attendance_records")
-          .insert({
-            student_id: studentId,
-            event_id: eventId,
-            status: "present",
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return { action: "time_in", data };
       }
     },
     onSuccess: (result) => {
