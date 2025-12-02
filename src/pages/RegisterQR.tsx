@@ -96,9 +96,9 @@ const RegisterQR = () => {
       setGeneratedQRCode(qrCode);
       setStep("qr");
       toast.success("QR Code generated successfully!");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error:", error);
-      toast.error(error.message || "Failed to register");
+      toast.error(error instanceof Error ? error.message : "Failed to register");
     } finally {
       setLoading(false);
     }

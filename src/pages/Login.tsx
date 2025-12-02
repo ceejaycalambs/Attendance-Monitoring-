@@ -11,15 +11,13 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const [pin, setPin] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [role, setRole] = useState<"register" | "scan">("register");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [officerRole, setOfficerRole] = useState<"rotc_officer" | "usc_officer">("rotc_officer");
+  const [officerEmail, setOfficerEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signUp, signIn, signInWithPin, user } = useAuth();
+  const { signInWithPin, user } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -27,55 +25,35 @@ const Login = () => {
     }
   }, [user, navigate]);
 
-  const handleStudentAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      if (isSignUp) {
-        const { error } = await signUp(email, password, name || email.split("@")[0]);
-        if (error) {
-          setError(error.message);
-        } else {
-          toast.success("Account created! Welcome!");
-          navigate("/dashboard");
-        }
-      } else {
-        const { error } = await signIn(email, password);
-        if (error) {
-          setError(error.message);
-        } else {
-          toast.success("Welcome back!");
-          navigate("/dashboard");
-        }
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleOfficerPin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
+    if (!officerEmail || !officerEmail.includes("@")) {
+      setError("Please enter a valid email address");
+      setLoading(false);
+      return;
+    }
+
+    if (pin.length !== 4) {
+      setError("PIN must be 4 digits");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Determine officer role based on selection or default to rotc_officer
-      const officerRole = "rotc_officer"; // Can be extended with another UI selection
-      const { success, error: pinError } = await signInWithPin(pin, officerRole);
+      const { success, error: pinError } = await signInWithPin(officerEmail, pin, officerRole);
       
       if (success) {
         toast.success("Access granted!");
         navigate("/scanner");
       } else {
-        setError(pinError || "Invalid PIN or expired");
+        setError(pinError || "Invalid email, PIN, or expired");
         setPin("");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -182,6 +160,51 @@ const Login = () => {
               </div>
             </div>
 
+            {/* Officer Type Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-white">
+                Officer Type*
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  onClick={() => setOfficerRole("rotc_officer")}
+                  className={officerRole === "rotc_officer" 
+                    ? "bg-success hover:bg-success/90 text-white transition-all" 
+                    : "bg-[hsl(220,24%,22%)] hover:bg-[hsl(220,24%,26%)] text-muted-foreground transition-all"}
+                >
+                  ROTC Staff
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setOfficerRole("usc_officer")}
+                  className={officerRole === "usc_officer" 
+                    ? "bg-success hover:bg-success/90 text-white transition-all" 
+                    : "bg-[hsl(220,24%,22%)] hover:bg-[hsl(220,24%,26%)] text-muted-foreground transition-all"}
+                >
+                  USC Council
+                </Button>
+              </div>
+            </div>
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-white">
+                Email Address *
+              </label>
+              <Input
+                type="email"
+                placeholder="officer@example.com"
+                value={officerEmail}
+                onChange={(e) => setOfficerEmail(e.target.value.toLowerCase().trim())}
+                className="bg-white text-foreground"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter your registered officer email
+              </p>
+            </div>
+
             {/* PIN Field */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-white">
@@ -195,7 +218,6 @@ const Login = () => {
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
                 className="bg-white text-foreground text-center text-xl tracking-widest font-bold"
-                autoFocus
               />
               <p className="text-xs text-muted-foreground">
                 Contact your supervisor for today's access PIN
@@ -214,7 +236,7 @@ const Login = () => {
             <Button
               type="submit"
               className="w-full bg-success hover:bg-success/90 text-white font-semibold py-6 text-base"
-              disabled={loading || pin.length !== 4}
+              disabled={loading || pin.length !== 4 || !officerEmail || !officerEmail.includes("@")}
             >
               {loading ? "Validating..." : "Access Scanner"}
             </Button>
@@ -222,9 +244,20 @@ const Login = () => {
         )}
 
         {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground">
-          Surigao del Norte State University • Secure Attendance System
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Surigao del Norte State University • Secure Attendance System
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => navigate("/admin")}
+          >
+            <Shield className="mr-1 h-3 w-3" />
+            Super Admin Portal
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

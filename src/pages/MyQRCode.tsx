@@ -29,7 +29,7 @@ const MyQRCode = () => {
     if (user) {
       fetchStudentData();
     }
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStudentData = async () => {
     if (!user) return;
@@ -51,7 +51,7 @@ const MyQRCode = () => {
         // Create student record if it doesn't exist
         await createStudentRecord();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching student data:", error);
       toast.error("Failed to load student data");
     } finally {
@@ -91,7 +91,7 @@ const MyQRCode = () => {
       setStudent(newStudent);
       generateQRCode(qrCode);
       toast.success("QR Code generated successfully!");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error creating student record:", error);
       toast.error("Failed to generate QR code");
     }

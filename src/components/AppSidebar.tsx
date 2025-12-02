@@ -1,4 +1,4 @@
-import { LayoutDashboard, ScanLine, Users, FileText, LogOut, UserPlus, Calendar, QrCode } from "lucide-react";
+import { LayoutDashboard, ScanLine, Users, FileText, LogOut, UserPlus, Calendar, QrCode, Shield, Key } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -13,6 +13,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -24,16 +25,23 @@ const items = [
   { title: "Reports", url: "/reports", icon: FileText },
 ];
 
+const adminItems = [
+  { title: "User Management", url: "/user-management", icon: Shield },
+  { title: "PIN Management", url: "/pin-management", icon: Key },
+];
+
 export function AppSidebar() {
   const { open } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
+  const { userRole, signOut } = useAuth();
   const currentPath = location.pathname;
+  const isSuperAdmin = userRole === "super_admin";
 
   const isActive = (path: string) => currentPath === path;
-  const isExpanded = items.some((i) => isActive(i.url));
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     navigate("/");
   };
 
@@ -75,6 +83,31 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isSuperAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        end
+                        className="hover:bg-sidebar-accent transition-colors"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {open && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <div className="mt-auto p-4 border-t border-sidebar-border">
           <Button

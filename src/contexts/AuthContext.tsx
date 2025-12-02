@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { User, Session } from "@supabase/supabase-js";
+import { User, Session, AuthError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 
@@ -8,10 +8,11 @@ interface AuthContextType {
   session: Session | null;
   userRole: string | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInWithPin: (pin: string, role: "rotc_officer" | "usc_officer") => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signInWithPin: (email: string, pin: string, role: "rotc_officer" | "usc_officer") => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,14 +56,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const fetchUserRole = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
+    try {
+      // Fetch all roles for the user (user can have multiple roles)
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
 
-    if (!error && data) {
-      setUserRole(data.role);
+      if (error) {
+        console.error("Error fetching user role:", error);
+        setUserRole(null);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Priority order: super_admin > rotc_officer > usc_officer > student
+        const rolePriority: Record<string, number> = {
+          super_admin: 4,
+          rotc_officer: 3,
+          usc_officer: 2,
+          student: 1,
+        };
+
+        // Sort by priority and get the highest priority role
+        const sortedRoles = data
+          .map((r) => r.role)
+          .sort((a, b) => (rolePriority[b] || 0) - (rolePriority[a] || 0));
+
+        const highestRole = sortedRoles[0];
+        console.log("User roles found:", data.map((r) => r.role), "→ Using:", highestRole);
+        setUserRole(highestRole);
+      } else {
+        console.warn("No role found for user:", userId);
+        setUserRole(null);
+      }
+    } catch (err) {
+      console.error("Exception fetching user role:", err);
+      setUserRole(null);
     }
   };
 
@@ -90,8 +120,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
-  const signInWithPin = async (pin: string, role: "rotc_officer" | "usc_officer") => {
+  const signInWithPin = async (email: string, pin: string, role: "rotc_officer" | "usc_officer") => {
     const { data, error } = await supabase.rpc("validate_daily_pin", {
+      _email: email,
       _pin: pin,
       _role: role
     });
@@ -102,19 +133,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (data) {
       // Store PIN session in sessionStorage (temporary for scanning session)
+      sessionStorage.setItem("officerEmail", email);
       sessionStorage.setItem("officerPin", pin);
       sessionStorage.setItem("officerRole", role);
       return { success: true };
     }
 
-    return { success: false, error: "Invalid PIN or expired" };
+    return { success: false, error: "Invalid email, PIN, or expired" };
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    sessionStorage.removeItem("officerEmail");
     sessionStorage.removeItem("officerPin");
     sessionStorage.removeItem("officerRole");
     navigate("/");
+  };
+
+  const refreshRole = async () => {
+    if (user?.id) {
+      await fetchUserRole(user.id);
+    }
   };
 
   return (
@@ -126,7 +165,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signUp,
       signIn,
       signInWithPin,
-      signOut
+      signOut,
+      refreshRole
     }}>
       {children}
     </AuthContext.Provider>

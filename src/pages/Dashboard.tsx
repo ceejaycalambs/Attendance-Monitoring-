@@ -1,16 +1,19 @@
 import { motion } from "framer-motion";
-import { Calendar, Users, TrendingUp, Clock } from "lucide-react";
+import { Calendar, Users, TrendingUp, Clock, Shield, UserPlus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { mockEvents, mockAttendance } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const staffName = sessionStorage.getItem("staffName") || "Staff Member";
+  const { userRole, user } = useAuth();
+  const staffName = user?.email?.split("@")[0] || sessionStorage.getItem("staffName") || "Staff Member";
   const activeEvent = mockEvents.find((e) => e.status === "active");
   const currentAttendance = mockAttendance.filter((a) => a.status === "present").length;
+  const isSuperAdmin = userRole === "super_admin";
 
   const stats = [
     {
@@ -88,6 +91,46 @@ const Dashboard = () => {
           </motion.div>
         ))}
       </div>
+
+      {/* Super Admin User Management Section */}
+      {isSuperAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <Card className="border-l-4 border-l-accent">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-accent" />
+                Super Admin Panel
+              </CardTitle>
+              <CardDescription>Manage officer accounts and system settings</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-accent/5">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      User Management
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Create accounts for ROTC Staff and USC Council members
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => navigate("/user-management")}
+                    className="bg-accent hover:bg-accent/90"
+                  >
+                    Manage Users
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

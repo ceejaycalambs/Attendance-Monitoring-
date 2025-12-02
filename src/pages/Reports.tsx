@@ -13,7 +13,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Reports = () => {
   const [selectedEvent, setSelectedEvent] = useState("");
-  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [attendanceData, setAttendanceData] = useState<Array<{
+    id: string;
+    event_id: string;
+    student_id: string;
+    time_in: string;
+    time_out: string | null;
+    status: string;
+    students: {
+      name: string;
+      student_id: string;
+      department: string;
+      program: string;
+    } | null;
+  }>>([]);
   const [loading, setLoading] = useState(false);
   
   const { data: events } = useEvents();
@@ -22,13 +35,13 @@ const Reports = () => {
     if (events && events.length > 0 && !selectedEvent) {
       setSelectedEvent(events[0].id);
     }
-  }, [events]);
+  }, [events, selectedEvent]);
 
   useEffect(() => {
     if (selectedEvent) {
       fetchAttendanceData();
     }
-  }, [selectedEvent]);
+  }, [selectedEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAttendanceData = async () => {
     if (!selectedEvent) return;
@@ -51,7 +64,7 @@ const Reports = () => {
 
       if (error) throw error;
       setAttendanceData(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching attendance:", error);
       toast.error("Failed to load attendance data");
     } finally {
