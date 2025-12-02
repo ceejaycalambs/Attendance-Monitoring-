@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
-import { ScanLine, CheckCircle, XCircle, Camera, Sun, Moon, LogIn, LogOut } from "lucide-react";
+import { ScanLine, CheckCircle, XCircle, Camera, Clock, LogIn, LogOut } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -288,23 +288,23 @@ const Scanner = () => {
             <div className="p-6 bg-card space-y-4">
               {/* Time Period Selection (AM/PM) */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold">Select Time Period</Label>
+                <Label className="text-base font-semibold text-foreground">Select Time Period</Label>
                 <RadioGroup
                   value={timePeriod}
                   onValueChange={(value) => setTimePeriod(value as "morning" | "afternoon")}
-                  className="flex gap-4"
+                  className="flex gap-3"
                 >
                   <div className="flex items-center space-x-2 flex-1">
                     <RadioGroupItem value="morning" id="morning" />
                     <Label
                       htmlFor="morning"
-                      className="flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 border-transparent hover:border-primary/20 transition-colors"
-                      style={{
-                        borderColor: timePeriod === "morning" ? "hsl(var(--primary))" : "transparent",
-                        backgroundColor: timePeriod === "morning" ? "hsl(var(--primary) / 0.1)" : "transparent",
-                      }}
+                      className={`flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 transition-colors ${
+                        timePeriod === "morning"
+                          ? "bg-[#1a7a3e] text-white border-[#1a7a3e]"
+                          : "bg-white text-foreground border-gray-300 hover:border-[#1a7a3e]/50"
+                      }`}
                     >
-                      <Sun className="h-4 w-4" />
+                      <Clock className="h-4 w-4" />
                       <span className="font-medium">AM</span>
                     </Label>
                   </div>
@@ -312,13 +312,13 @@ const Scanner = () => {
                     <RadioGroupItem value="afternoon" id="afternoon" />
                     <Label
                       htmlFor="afternoon"
-                      className="flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 border-transparent hover:border-primary/20 transition-colors"
-                      style={{
-                        borderColor: timePeriod === "afternoon" ? "hsl(var(--primary))" : "transparent",
-                        backgroundColor: timePeriod === "afternoon" ? "hsl(var(--primary) / 0.1)" : "transparent",
-                      }}
+                      className={`flex items-center gap-2 cursor-pointer flex-1 justify-center p-3 rounded-lg border-2 transition-colors ${
+                        timePeriod === "afternoon"
+                          ? "bg-[#1a7a3e] text-white border-[#1a7a3e]"
+                          : "bg-white text-foreground border-gray-300 hover:border-[#1a7a3e]/50"
+                      }`}
                     >
-                      <Moon className="h-4 w-4" />
+                      <Clock className="h-4 w-4" />
                       <span className="font-medium">PM</span>
                     </Label>
                   </div>
@@ -327,7 +327,7 @@ const Scanner = () => {
 
               {/* Action Type Selection (Time In/Time Out) */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold">Select Action</Label>
+                <Label className="text-base font-semibold text-foreground">Select Action</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     type="button"
@@ -335,8 +335,8 @@ const Scanner = () => {
                     variant={actionType === "time_in" ? "default" : "outline"}
                     className={`flex items-center gap-2 ${
                       actionType === "time_in" 
-                        ? "bg-success hover:bg-success/90 text-white" 
-                        : ""
+                        ? "bg-[#1a7a3e] hover:bg-[#155a2e] text-white border border-white" 
+                        : "bg-white text-[#1a7a3e] border-2 border-[#1a7a3e] hover:bg-[#1a7a3e]/10"
                     }`}
                   >
                     <LogIn className="h-4 w-4" />
@@ -348,8 +348,8 @@ const Scanner = () => {
                     variant={actionType === "time_out" ? "default" : "outline"}
                     className={`flex items-center gap-2 ${
                       actionType === "time_out" 
-                        ? "bg-destructive hover:bg-destructive/90 text-white" 
-                        : ""
+                        ? "bg-[#1a7a3e] hover:bg-[#155a2e] text-white border border-white" 
+                        : "bg-white text-[#1a7a3e] border-2 border-[#1a7a3e] hover:bg-[#1a7a3e]/10"
                     }`}
                   >
                     <LogOut className="h-4 w-4" />
