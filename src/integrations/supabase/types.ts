@@ -66,6 +66,8 @@ export type Database = {
           pin: string
           role: Database["public"]["Enums"]["app_role"]
           valid_date: string
+          event_id: string | null
+          email: string | null
         }
         Insert: {
           created_at?: string
@@ -73,6 +75,8 @@ export type Database = {
           pin: string
           role: Database["public"]["Enums"]["app_role"]
           valid_date?: string
+          event_id?: string | null
+          email?: string | null
         }
         Update: {
           created_at?: string
@@ -80,8 +84,18 @@ export type Database = {
           pin?: string
           role?: Database["public"]["Enums"]["app_role"]
           valid_date?: string
+          event_id?: string | null
+          email?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "daily_pins_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       events: {
         Row: {
@@ -201,8 +215,18 @@ export type Database = {
         Returns: boolean
       }
       validate_daily_pin: {
-        Args: { _pin: string; _role: Database["public"]["Enums"]["app_role"] }
+        Args: { _pin: string; _role: Database["public"]["Enums"]["app_role"]; _email?: string | null }
         Returns: boolean
+      }
+      get_officers: {
+        Args: { _filter_role?: Database["public"]["Enums"]["app_role"] | null }
+        Returns: {
+          id: string
+          email: string
+          name: string
+          role: Database["public"]["Enums"]["app_role"]
+          created_at: string
+        }[]
       }
     }
     Enums: {

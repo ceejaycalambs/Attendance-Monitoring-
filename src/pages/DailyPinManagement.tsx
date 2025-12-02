@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Key, Shield, Calendar, Mail, User, AlertCircle, CheckCircle, Trash2, Plus } from "lucide-react";
+import { Key, Shield, Calendar, AlertCircle, CheckCircle, Trash2, Plus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,20 +15,17 @@ import { format } from "date-fns";
 
 interface DailyPin {
   id: string;
-  email: string;
   pin: string;
   valid_date: string;
   role: "rotc_officer" | "usc_officer";
-  event_id: string | null;
+  event_id: string;
   created_at: string;
 }
 
 interface PinFormData {
-  email: string;
   pin: string;
   valid_date: string;
-  role: "rotc_officer" | "usc_officer";
-  event_id: string | null;
+  event_id: string; // Required now
 }
 
 const DailyPinManagement = () => {
@@ -39,11 +36,9 @@ const DailyPinManagement = () => {
   const [error, setError] = useState("");
   const [pins, setPins] = useState<DailyPin[]>([]);
   const [formData, setFormData] = useState<PinFormData>({
-    email: "",
     pin: "",
     valid_date: new Date().toISOString().split("T")[0],
-    role: "rotc_officer",
-    event_id: null,
+    event_id: "",
   });
 
   // Check if user is super admin
@@ -88,10 +83,6 @@ const DailyPinManagement = () => {
 
     try {
       // Validate inputs
-      if (!formData.email || !formData.email.includes("@")) {
-        throw new Error("Please enter a valid email address");
-      }
-
       if (!formData.pin || formData.pin.length !== 4 || !/^\d{4}$/.test(formData.pin)) {
         throw new Error("PIN must be exactly 4 digits");
       }
@@ -100,77 +91,77 @@ const DailyPinManagement = () => {
         throw new Error("Please select a valid date");
       }
 
-      // Insert PIN (try without event_id first if migration not run)
-      let insertData: any = {
-        email: formData.email.toLowerCase().trim(),
-        pin: formData.pin,
-        role: formData.role,
-        valid_date: formData.valid_date,
-      };
-
-      // Only include event_id if it's not null (in case migration hasn't been run)
-      if (formData.event_id) {
-        insertData.event_id = formData.event_id;
+      if (!formData.event_id) {
+        throw new Error("Please select an event");
       }
 
-      const { error: pinError } = await supabase
-        .from("daily_pins")
-        .insert(insertData);
+      // Insert PIN (PIN is shared for all officers, no role distinction)
+      // Create PIN for both ROTC and USC officers
+      // Handle case where email column might still exist in database
+      const baseInsertData: any = {
+        pin: formData.pin,
+        valid_date: formData.valid_date,
+        event_id: formData.event_id,
+      };
 
-      if (pinError) {
-        console.error("PIN insert error:", pinError);
-        
-        // If column doesn't exist error, try without event_id
-        if (pinError.message?.includes("column") && pinError.message?.includes("event_id")) {
-          // Retry without event_id
-          const { error: retryError } = await supabase
-            .from("daily_pins")
-            .insert({
-              email: formData.email.toLowerCase().trim(),
-              pin: formData.pin,
-              role: formData.role,
-              valid_date: formData.valid_date,
-            });
+      // Insert for both roles
+      const [rotcResult, uscResult] = await Promise.all([
+        supabase.from("daily_pins").insert({
+          ...baseInsertData,
+          role: "rotc_officer" as const,
+        }),
+        supabase.from("daily_pins").insert({
+          ...baseInsertData,
+          role: "usc_officer" as const,
+        }),
+      ]);
 
-          if (retryError) {
-            if (retryError.code === "23505") {
-              // If PIN already exists, update it
-              const { error: updateError } = await supabase
-                .from("daily_pins")
-                .update({ pin: formData.pin })
-                .eq("email", formData.email.toLowerCase().trim())
-                .eq("role", formData.role)
-                .eq("valid_date", formData.valid_date);
-
-              if (updateError) {
-                throw new Error(`Failed to update PIN: ${updateError.message}. Please run the migration ADD_EVENT_TO_DAILY_PINS.sql first.`);
-              }
-              toast.success(`PIN updated for ${formData.email}!`);
-            } else {
-              throw new Error(`Failed to create PIN: ${retryError.message}. ${retryError.message.includes("row-level security") ? "Check RLS policies." : ""}`);
-            }
-          } else {
-            toast.success(`PIN created for ${formData.email}! (Note: Run ADD_EVENT_TO_DAILY_PINS.sql migration to enable event-specific PINs)`);
-          }
-        } else if (pinError.code === "23505") {
-          // If PIN already exists, update it
+      // Check for errors
+      if (rotcResult.error) {
+        console.error("ROTC PIN insert error:", rotcResult.error);
+        // If it's a unique constraint violation, try to update
+        if (rotcResult.error.code === "23505") {
           const { error: updateError } = await supabase
             .from("daily_pins")
             .update({ pin: formData.pin })
-            .eq("email", formData.email.toLowerCase().trim())
-            .eq("role", formData.role)
+            .eq("role", "rotc_officer")
             .eq("valid_date", formData.valid_date)
-            .eq("event_id", formData.event_id || null);
-
+            .eq("event_id", formData.event_id);
+          
           if (updateError) {
-            throw new Error(`Failed to update PIN: ${updateError.message}`);
+            console.error("ROTC PIN update error:", updateError);
+            throw new Error(`Failed to create/update PIN for ROTC: ${updateError.message}`);
           }
-          toast.success(`PIN updated for ${formData.email}!`);
         } else {
-          throw new Error(`Failed to create PIN: ${pinError.message}. ${pinError.message.includes("row-level security") ? "Check RLS policies - make sure you have super_admin role." : ""}`);
+          throw new Error(`Failed to create PIN for ROTC: ${rotcResult.error.message}. Make sure you've run the FIX_DAILY_PINS_SCHEMA.sql migration.`);
         }
+      }
+
+      if (uscResult.error) {
+        console.error("USC PIN insert error:", uscResult.error);
+        // If it's a unique constraint violation, try to update
+        if (uscResult.error.code === "23505") {
+          const { error: updateError } = await supabase
+            .from("daily_pins")
+            .update({ pin: formData.pin })
+            .eq("role", "usc_officer")
+            .eq("valid_date", formData.valid_date)
+            .eq("event_id", formData.event_id);
+          
+          if (updateError) {
+            console.error("USC PIN update error:", updateError);
+            throw new Error(`Failed to create/update PIN for USC: ${updateError.message}`);
+          }
+        } else {
+          throw new Error(`Failed to create PIN for USC: ${uscResult.error.message}. Make sure you've run the FIX_DAILY_PINS_SCHEMA.sql migration.`);
+        }
+      }
+
+      // Success message
+      if (rotcResult.error?.code === "23505" || uscResult.error?.code === "23505") {
+        toast.success(`PIN updated for all officers!`);
       } else {
-        toast.success(`PIN created for ${formData.email}!`);
+        toast.success(`PIN created for all officers!`);
       }
 
       setSuccess(true);
@@ -178,11 +169,9 @@ const DailyPinManagement = () => {
 
       // Reset form
       setFormData({
-        email: "",
         pin: "",
         valid_date: new Date().toISOString().split("T")[0],
-        role: "rotc_officer",
-        event_id: null,
+        event_id: "",
       });
 
       setTimeout(() => setSuccess(false), 3000);
@@ -214,8 +203,8 @@ const DailyPinManagement = () => {
     }
   };
 
-  const getEventName = (eventId: string | null) => {
-    if (!eventId) return "General (No Event)";
+  const getEventName = (eventId: string) => {
+    if (!eventId) return "Unknown Event";
     const event = events?.find((e) => e.id === eventId);
     return event ? event.name : "Unknown Event";
   };
@@ -249,7 +238,7 @@ const DailyPinManagement = () => {
               Create Daily PIN
             </CardTitle>
             <CardDescription className="text-base">
-              Create a PIN for an officer for a specific date and event
+              Create a PIN for all officers (ROTC Staff and USC Council) for a specific date and event. PIN is valid for one day only.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -273,23 +262,6 @@ const DailyPinManagement = () => {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Email Field */}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Officer Email *</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="officer@university.edu"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase().trim() })}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
                 {/* PIN Field */}
                 <div className="space-y-2">
                   <Label htmlFor="pin">PIN (4 digits) *</Label>
@@ -322,39 +294,19 @@ const DailyPinManagement = () => {
                   </div>
                 </div>
 
-                {/* Role Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="role">Officer Type *</Label>
-                  <Select
-                    value={formData.role}
-                    onValueChange={(value: "rotc_officer" | "usc_officer") =>
-                      setFormData({ ...formData, role: value })
-                    }
-                  >
-                    <SelectTrigger id="role">
-                      <SelectValue placeholder="Select officer type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rotc_officer">ROTC Staff</SelectItem>
-                      <SelectItem value="usc_officer">USC Council</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Event Selection */}
+                {/* Event Selection - Required */}
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="event">Event (Optional)</Label>
+                  <Label htmlFor="event">Event *</Label>
                   <Select
-                    value={formData.event_id || ""}
+                    value={formData.event_id}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, event_id: value === "none" ? null : value })
+                      setFormData({ ...formData, event_id: value })
                     }
                   >
                     <SelectTrigger id="event">
-                      <SelectValue placeholder="Select an event (or leave blank for general PIN)" />
+                      <SelectValue placeholder="Select an event" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">General (No Event)</SelectItem>
                       {events?.map((event) => (
                         <SelectItem key={event.id} value={event.id}>
                           {event.name} - {format(new Date(event.date), "MMM d, yyyy")}
@@ -363,7 +315,7 @@ const DailyPinManagement = () => {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Leave blank for a general daily PIN, or select a specific event
+                    PIN will be valid for all officers (ROTC Staff and USC Council) for this event on the selected date
                   </p>
                 </div>
               </div>
@@ -415,7 +367,6 @@ const DailyPinManagement = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-2">Email</th>
                       <th className="text-left p-2">PIN</th>
                       <th className="text-left p-2">Date</th>
                       <th className="text-left p-2">Role</th>
@@ -426,7 +377,6 @@ const DailyPinManagement = () => {
                   <tbody>
                     {pins.map((pin) => (
                       <tr key={pin.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{pin.email}</td>
                         <td className="p-2 font-mono font-bold">{pin.pin}</td>
                         <td className="p-2">{format(new Date(pin.valid_date), "MMM d, yyyy")}</td>
                         <td className="p-2">

@@ -17,6 +17,7 @@ import Events from "./pages/Events";
 import MyQRCode from "./pages/MyQRCode";
 import UserManagement from "./pages/UserManagement";
 import DailyPinManagement from "./pages/DailyPinManagement";
+import OfficersList from "./pages/OfficersList";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/my-qr" element={<Layout><MyQRCode /></Layout>} />
             <Route path="/user-management" element={<Layout><UserManagement /></Layout>} />
             <Route path="/pin-management" element={<Layout><DailyPinManagement /></Layout>} />
+            <Route path="/officers" element={<Layout><OfficersList /></Layout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

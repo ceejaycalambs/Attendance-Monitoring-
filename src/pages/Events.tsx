@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { CalendarPlus, Calendar, Play, CheckCircle, Clock, History } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEvents, useCreateEvent, useUpdateEventStatus, Event } from "@/hooks/useEvents";
 import { format } from "date-fns";
+import { mergeSort } from "@/utils/algorithms/Sorting";
 
 const statusConfig: Record<Event["status"], { label: string; icon: React.ElementType; variant: "default" | "secondary" | "outline" }> = {
   active: { label: "Active", icon: Play, variant: "default" },
@@ -31,13 +32,23 @@ const Events = () => {
   const createEvent = useCreateEvent();
   const updateStatus = useUpdateEventStatus();
 
-  const filteredEvents = events?.filter((event) => {
-    if (activeTab === "all") return true;
-    if (activeTab === "active") return event.status === "active";
-    if (activeTab === "scheduled") return event.status === "scheduled";
-    if (activeTab === "history") return event.status === "completed";
-    return true;
-  }) || [];
+  // Sort events by date using merge sort (O(n log n))
+  const sortedEvents = useMemo(() => {
+    if (!events) return [];
+    return mergeSort([...events], (a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime(); // Newest first
+    });
+  }, [events]);
+
+  const filteredEvents = useMemo(() => {
+    return sortedEvents.filter((event) => {
+      if (activeTab === "all") return true;
+      if (activeTab === "active") return event.status === "active";
+      if (activeTab === "scheduled") return event.status === "scheduled";
+      if (activeTab === "history") return event.status === "completed";
+      return true;
+    });
+  }, [sortedEvents, activeTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

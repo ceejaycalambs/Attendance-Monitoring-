@@ -27,6 +27,7 @@ const items = [
 
 const adminItems = [
   { title: "User Management", url: "/user-management", icon: Shield },
+  { title: "Officers List", url: "/officers", icon: Users },
   { title: "PIN Management", url: "/pin-management", icon: Key },
 ];
 

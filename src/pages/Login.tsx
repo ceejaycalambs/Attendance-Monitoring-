@@ -11,13 +11,14 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const [pin, setPin] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<"register" | "scan">("register");
   const [officerRole, setOfficerRole] = useState<"rotc_officer" | "usc_officer">("rotc_officer");
   const [officerEmail, setOfficerEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signInWithPin, user } = useAuth();
+  const { signInWithPin, signIn, user } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -36,6 +37,12 @@ const Login = () => {
       return;
     }
 
+    if (!password) {
+      setError("Please enter your password");
+      setLoading(false);
+      return;
+    }
+
     if (pin.length !== 4) {
       setError("PIN must be 4 digits");
       setLoading(false);
@@ -43,13 +50,23 @@ const Login = () => {
     }
 
     try {
+      // First verify password
+      const { error: signInError } = await signIn(officerEmail, password);
+      
+      if (signInError) {
+        setError("Invalid email or password");
+        setLoading(false);
+        return;
+      }
+
+      // Then verify PIN
       const { success, error: pinError } = await signInWithPin(officerEmail, pin, officerRole);
       
       if (success) {
         toast.success("Access granted!");
         navigate("/scanner");
       } else {
-        setError(pinError || "Invalid email, PIN, or expired");
+        setError(pinError || "Invalid PIN or expired");
         setPin("");
       }
     } catch (err) {
@@ -202,6 +219,23 @@ const Login = () => {
               />
               <p className="text-xs text-muted-foreground">
                 Enter your registered officer email
+              </p>
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-white">
+                Password *
+              </label>
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-white text-foreground"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter your account password
               </p>
             </div>
 

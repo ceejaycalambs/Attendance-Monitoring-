@@ -124,8 +124,8 @@ ON CONFLICT (user_id, role) DO NOTHING;`}
       if (authError) {
         console.error("Auth error details:", authError);
         // Provide more helpful error messages
-        if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
-          throw new Error(`Email ${formData.email} is already registered. Please use a different email.`);
+        if (authError.message.includes("already registered") || authError.message.includes("already exists") || authError.message.includes("User already registered")) {
+          throw new Error("Already registered");
         }
         if (authError.message.includes("password")) {
           throw new Error("Password does not meet requirements. Please use a stronger password.");

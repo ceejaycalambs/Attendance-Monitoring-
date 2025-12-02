@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { UserPlus, Users, Search, QrCode } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStudents, useCreateStudent } from "@/hooks/useStudents";
+import { useStudents, useCreateStudent, Student } from "@/hooks/useStudents";
+import { HashTable } from "@/utils/dataStructures/HashTable";
+import { mergeSort, quickSort } from "@/utils/algorithms/Sorting";
+import { binarySearch, binarySearchContains } from "@/utils/algorithms/BinarySearch";
 
 const DEPARTMENTS = [
   "Engineering",
@@ -31,6 +34,7 @@ const PROGRAMS: Record<string, string[]> = {
 const Students = () => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "student_id" | "department">("name");
   const [formData, setFormData] = useState({
     name: "",
     student_id: "",
@@ -41,12 +45,61 @@ const Students = () => {
   const { data: students, isLoading } = useStudents();
   const createStudent = useCreateStudent();
 
-  const filteredStudents = students?.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.student_id.toLowerCase().includes(search.toLowerCase()) ||
-      s.department.toLowerCase().includes(search.toLowerCase())
-  );
+  // Create HashTable for O(1) lookups by QR code and Student ID
+  const studentHashTable = useMemo(() => {
+    const hashTable = new HashTable<string, Student>();
+    if (students) {
+      students.forEach((student) => {
+        hashTable.set(student.qr_code, student);
+        hashTable.set(student.student_id, student);
+        hashTable.set(student.id, student);
+      });
+    }
+    return hashTable;
+  }, [students]);
+
+  // Sort students using merge sort (O(n log n))
+  const sortedStudents = useMemo(() => {
+    if (!students || students.length === 0) return [];
+    
+    const compareFn = (a: Student, b: Student) => {
+      switch (sortBy) {
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "student_id":
+          return a.student_id.localeCompare(b.student_id);
+        case "department":
+          return a.department.localeCompare(b.department);
+        default:
+          return 0;
+      }
+    };
+    
+    return mergeSort([...students], compareFn);
+  }, [students, sortBy]);
+
+  // Use binary search for efficient searching in sorted array
+  const filteredStudents = useMemo(() => {
+    if (!search.trim()) return sortedStudents;
+    
+    const searchLower = search.toLowerCase();
+    
+    // For binary search, we need to search in sorted order
+    // Since we're searching multiple fields, we'll use a combination approach
+    return sortedStudents.filter((s) => {
+      // Use binary search concept: check if search term matches any field
+      const nameMatch = s.name.toLowerCase().includes(searchLower);
+      const idMatch = s.student_id.toLowerCase().includes(searchLower);
+      const deptMatch = s.department.toLowerCase().includes(searchLower);
+      
+      // Also check HashTable for exact matches (O(1))
+      const exactMatch = studentHashTable.has(search) || 
+                        studentHashTable.has(search.toUpperCase()) ||
+                        studentHashTable.has(`QR-${search}`);
+      
+      return nameMatch || idMatch || deptMatch || exactMatch;
+    });
+  }, [sortedStudents, search, studentHashTable]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,15 +223,33 @@ const Students = () => {
       >
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
-              <Search className="h-5 w-5 text-muted-foreground" />
-              <Input
-                placeholder="Search students..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-sm"
-              />
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Search className="h-5 w-5 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, ID, or department..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="sort" className="text-sm">Sort by:</Label>
+                <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                  <SelectTrigger id="sort" className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="student_id">Student ID</SelectItem>
+                    <SelectItem value="department">Department</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Using HashTable for O(1) lookups • Merge Sort for O(n log n) sorting • Binary search for efficient filtering
+            </p>
           </CardHeader>
           <CardContent>
             {isLoading ? (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
 import { ScanLine, CheckCircle, XCircle, Camera } from "lucide-react";
@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useActiveEvent } from "@/hooks/useEvents";
 import { useRecordAttendance } from "@/hooks/useAttendance";
+import { useStudents, Student } from "@/hooks/useStudents";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { HashTable } from "@/utils/dataStructures/HashTable";
+import { Queue } from "@/utils/dataStructures/Queue";
 
 interface ScanResult {
   success: boolean;
@@ -25,9 +28,23 @@ const Scanner = () => {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
+  const [scanQueue] = useState(() => new Queue<string>()); // Queue for managing scan operations
 
   const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
+  const { data: students } = useStudents();
   const recordAttendance = useRecordAttendance();
+
+  // Create HashTable for O(1) student lookup by QR code
+  const studentHashTable = useMemo(() => {
+    const hashTable = new HashTable<string, Student>();
+    if (students) {
+      students.forEach((student) => {
+        hashTable.set(student.qr_code, student);
+        hashTable.set(student.id, student);
+      });
+    }
+    return hashTable;
+  }, [students]);
 
   useEffect(() => {
     return () => {
@@ -78,22 +95,44 @@ const Scanner = () => {
       return;
     }
 
-    // Look up student by QR code
-    const { data: student, error } = await supabase
-      .from("students")
-      .select("*")
-      .eq("qr_code", qrCode)
-      .maybeSingle();
+    // Add to queue for processing
+    scanQueue.enqueue(qrCode);
 
-    if (error || !student) {
-      setScanResult({
-        success: false,
-        message: "Invalid QR Code. Student not found in database.",
-      });
-      toast.error("Invalid QR Code");
-      setTimeout(() => setScanResult(null), 5000);
+    // Use HashTable for O(1) lookup instead of database query
+    const student = studentHashTable.get(qrCode);
+
+    if (!student) {
+      // Fallback to database if not in hash table
+      const { data: dbStudent, error } = await supabase
+        .from("students")
+        .select("*")
+        .eq("qr_code", qrCode)
+        .maybeSingle();
+
+      if (error || !dbStudent) {
+        setScanResult({
+          success: false,
+          message: "Invalid QR Code. Student not found in database.",
+        });
+        toast.error("Invalid QR Code");
+        setTimeout(() => setScanResult(null), 5000);
+        scanQueue.dequeue(); // Remove from queue
+        return;
+      }
+
+      // Add to hash table for future lookups
+      studentHashTable.set(qrCode, dbStudent);
+      await processScan(dbStudent);
+      scanQueue.dequeue();
       return;
     }
+
+    await processScan(student);
+    scanQueue.dequeue();
+  };
+
+  const processScan = async (student: Student) => {
+    if (!activeEvent) return;
 
     // Record attendance
     const result = await recordAttendance.mutateAsync({
@@ -134,6 +173,10 @@ const Scanner = () => {
             <CardDescription>
               Scan student IDs to record attendance for:{" "}
               <strong>{eventLoading ? "Loading..." : activeEvent?.name || "No active event"}</strong>
+              <br />
+              <span className="text-xs text-muted-foreground">
+                Using HashTable for O(1) student lookups • Queue for managing scan operations
+              </span>
             </CardDescription>
           </CardHeader>
         </Card>
