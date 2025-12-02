@@ -22,7 +22,7 @@ const SuperAdminLogin = () => {
     setError("");
     setLoading(true);
 
-    if (!email || !email.includes("@")) {
+    if (!email?.includes("@")) {
       setError("Please enter a valid email address");
       setLoading(false);
       return;
@@ -53,40 +53,73 @@ const SuperAdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[hsl(220,26%,14%)] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md space-y-8"
-      >
-        {/* Header with Shield Icon */}
-        <div className="text-center space-y-4">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="mx-auto w-24 h-24 bg-success rounded-full flex items-center justify-center shadow-glow"
-          >
-            <Shield className="h-12 w-12 text-white" />
-          </motion.div>
-          <div>
-            <h1 className="text-3xl font-bold text-white">
-              Super Admin Portal
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Secure access to system administration
-            </p>
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
+      {/* Yellow Header Bar */}
+      <div className="w-full h-16 bg-yellow-400 flex-shrink-0 z-20" />
+      
+      {/* Main Content Area with Building Background */}
+      <div className="flex-1 flex items-center justify-center p-4 relative">
+        {/* Background Building Overlay */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/snsu-building.jpg')",
+          }}
+        />
+        
+        {/* Green Overlay - matching the image style */}
+        <div className="absolute inset-0 bg-[#1a7a3e]/85" />
+        
+        {/* Content Container */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md space-y-8 relative z-10"
+        >
+          {/* Header with School Logo */}
+          <div className="text-center space-y-4">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="mx-auto w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-2xl p-3"
+            >
+              <img 
+                src="/snsu-logo.png" 
+                alt="SNSU Logo" 
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  // Fallback to shield if image fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.parentElement?.querySelector('.fallback-icon');
+                  if (fallback) {
+                    (fallback as HTMLElement).style.display = 'flex';
+                  }
+                }}
+              />
+              <div className="fallback-icon hidden items-center justify-center w-full h-full">
+                <Shield className="h-16 w-16 text-[#1a7a3e]" />
+              </div>
+            </motion.div>
+            <div>
+              <h1 className="text-3xl font-bold text-white drop-shadow-lg">
+                Super Admin Portal
+              </h1>
+              <p className="text-white mt-2 drop-shadow-md">
+                Secure access to system administration
+              </p>
+            </div>
           </div>
-        </div>
 
-        <Card className="bg-accent/5 border-accent/20">
-          <CardContent className="pt-6">
+          <Card className="bg-white/95 backdrop-blur-sm border-white/30 shadow-2xl">
+            <CardContent className="pt-6">
 
             <form onSubmit={handleLogin} className="space-y-6">
               {/* Email Field */}
               <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-semibold text-white">
+                <label htmlFor="email" className="text-sm font-semibold text-[#1a7a3e]">
                   Email Address *
                 </label>
                 <Input
@@ -95,7 +128,7 @@ const SuperAdminLogin = () => {
                   placeholder="admin@university.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value.toLowerCase().trim())}
-                  className="bg-white text-foreground"
+                  className="bg-white text-gray-900 border-2 border-white/50 focus:border-[#1a7a3e] shadow-lg"
                   autoFocus
                   required
                 />
@@ -103,7 +136,7 @@ const SuperAdminLogin = () => {
 
               {/* Password Field */}
               <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-semibold text-white">
+                <label htmlFor="password" className="text-sm font-semibold text-[#1a7a3e]">
                   Password *
                 </label>
                 <Input
@@ -112,14 +145,14 @@ const SuperAdminLogin = () => {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-white text-foreground"
+                  className="bg-white text-gray-900 border-2 border-white/50 focus:border-[#1a7a3e] shadow-lg"
                   required
                 />
               </div>
 
               {/* Error Message */}
               {error && (
-                <Alert variant="destructive" className="bg-destructive/20 border-destructive">
+                <Alert variant="destructive" className="bg-red-500/20 border-red-500 text-white backdrop-blur-sm">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
@@ -128,7 +161,7 @@ const SuperAdminLogin = () => {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full bg-success hover:bg-success/90 text-white font-semibold py-6 text-base"
+                className="w-full bg-[#1a7a3e] hover:bg-[#155a2e] text-white font-semibold py-6 text-base shadow-lg border border-white"
                 disabled={loading || !email || !password}
               >
                 {loading ? "Signing In..." : "Sign In"}
@@ -138,7 +171,7 @@ const SuperAdminLogin = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full text-muted-foreground hover:text-white"
+                className="w-full text-white/80 hover:text-white hover:bg-white/20"
                 onClick={() => navigate("/")}
               >
                 ← Back to Main Login
@@ -148,10 +181,11 @@ const SuperAdminLogin = () => {
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-white/90 drop-shadow-md">
           Surigao del Norte State University • Admin Access Only
         </p>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };

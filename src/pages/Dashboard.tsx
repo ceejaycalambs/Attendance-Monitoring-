@@ -20,8 +20,8 @@ const Dashboard = () => {
       title: "Active Event",
       value: activeEvent?.name || "No active event",
       icon: Calendar,
-      color: "text-accent",
-      bg: "bg-accent/10",
+      color: "text-success",
+      bg: "bg-success/10",
     },
     {
       title: "Present Now",

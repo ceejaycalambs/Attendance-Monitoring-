@@ -43,23 +43,23 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className={open ? "w-60" : "w-14"} collapsible="icon">
-      <SidebarContent>
-        <div className="p-4 border-b border-sidebar-border">
+    <Sidebar className={`${open ? "w-60" : "w-14"} bg-white border-r border-border`} collapsible="icon">
+      <SidebarContent className="bg-white">
+        <div className="p-4 border-b border-border">
           {open ? (
             <div>
-              <h2 className="text-lg font-bold text-sidebar-primary">ID-SCAN</h2>
-              <p className="text-xs text-sidebar-foreground/70">Attendance Tracking</p>
+              <h2 className="text-lg font-bold text-[#1a7a3e]">ID-SCAN</h2>
+              <p className="text-xs text-muted-foreground">Attendance Tracking</p>
             </div>
           ) : (
             <div className="flex justify-center">
-              <ScanLine className="h-6 w-6 text-success" />
+              <ScanLine className="h-6 w-6 text-[#1a7a3e]" />
             </div>
           )}
         </div>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-muted-foreground">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
@@ -68,8 +68,8 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end
-                      className="hover:bg-sidebar-accent transition-colors"
-                      activeClassName="bg-success/20 text-success font-semibold border-l-4 border-success"
+                      className="hover:bg-[#1a7a3e]/10 hover:text-[#1a7a3e] text-foreground transition-colors"
+                      activeClassName="bg-[#1a7a3e] text-white font-semibold border-l-4 border-[#1a7a3e]"
                     >
                       <item.icon className="h-4 w-4" />
                       {open && <span>{item.title}</span>}
@@ -83,7 +83,7 @@ export function AppSidebar() {
 
         {isSuperAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-muted-foreground">Admin</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminItems.map((item) => (
@@ -92,8 +92,8 @@ export function AppSidebar() {
                       <NavLink
                         to={item.url}
                         end
-                        className="hover:bg-sidebar-accent transition-colors"
-                        activeClassName="bg-success/20 text-success font-semibold border-l-4 border-success"
+                        className="hover:bg-[#1a7a3e]/15 hover:text-[#1a7a3e] text-foreground transition-colors font-medium"
+                        activeClassName="bg-[#1a7a3e] text-white font-semibold border-l-4 border-[#1a7a3e]"
                       >
                         <item.icon className="h-4 w-4" />
                         {open && <span>{item.title}</span>}
@@ -106,10 +106,10 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        <div className="mt-auto p-4 border-t border-sidebar-border">
+        <div className="mt-auto p-4 border-t border-border">
           <Button
             variant="ghost"
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary"
+            className="w-full justify-start text-foreground hover:bg-[#1a7a3e]/10 hover:text-[#1a7a3e]"
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" />
