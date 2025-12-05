@@ -57,6 +57,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchUserRole = async (userId: string) => {
     try {
+      console.log("Fetching role for user:", userId);
+      
       // Fetch all roles for the user (user can have multiple roles)
       const { data, error } = await supabase
         .from("user_roles")
@@ -64,10 +66,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("user_id", userId);
 
       if (error) {
-        console.error("Error fetching user role:", error);
+        console.error("Error fetching user role:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          fullError: error
+        });
+        // Log the full error for debugging
+        console.error("Full error object:", error);
         setUserRole(null);
         return;
       }
+
+      console.log("Role query result:", { data, count: data?.length || 0 });
 
       if (data && data.length > 0) {
         // Priority order: super_admin > rotc_officer > usc_officer > student
@@ -87,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log("User roles found:", data.map((r) => r.role), "→ Using:", highestRole);
         setUserRole(highestRole);
       } else {
-        console.warn("No role found for user:", userId);
+        console.warn("No role found for user:", userId, "- User may need role assignment in database");
         setUserRole(null);
       }
     } catch (err) {

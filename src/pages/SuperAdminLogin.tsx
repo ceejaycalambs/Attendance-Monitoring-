@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, AlertCircle } from "lucide-react";
@@ -15,7 +15,14 @@ const SuperAdminLogin = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, userRole, user } = useAuth();
+
+  // Redirect if already logged in as super admin
+  useEffect(() => {
+    if (user && userRole === "super_admin") {
+      navigate("/user-management");
+    }
+  }, [user, userRole, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,14 +47,19 @@ const SuperAdminLogin = () => {
       if (signInError) {
         setError(signInError.message);
         toast.error("Login failed");
+        setLoading(false);
       } else {
         toast.success("Welcome, Super Admin!");
-        navigate("/dashboard");
+        // Redirect to user-management page (super admin dashboard)
+        // Wait a moment for role to be fetched by AuthContext
+        setTimeout(() => {
+          navigate("/user-management");
+        }, 500);
+        setLoading(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       toast.error("Login failed");
-    } finally {
       setLoading(false);
     }
   };

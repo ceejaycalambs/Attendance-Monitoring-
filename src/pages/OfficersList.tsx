@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { mergeSort } from "@/utils/algorithms/Sorting";
-import { HashTable } from "@/utils/dataStructures/HashTable";
 
 interface Officer {
   id: string;
@@ -26,23 +25,11 @@ const OfficersList = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "rotc_officer" | "usc_officer">("all");
 
-  // Check if user is super admin
-  if (userRole !== "super_admin") {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Access denied. Super admin privileges required.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   useEffect(() => {
-    fetchOfficers();
-  }, [filter]);
+    if (userRole === "super_admin") {
+      fetchOfficers();
+    }
+  }, [filter, userRole]);
 
   const fetchOfficers = async () => {
     try {
@@ -138,16 +125,6 @@ const OfficersList = () => {
     });
   }, [officers]);
 
-  // Create HashTable for O(1) lookups by email or ID
-  const officerHashTable = useMemo(() => {
-    const hashTable = new HashTable<string, Officer>();
-    officers.forEach((officer) => {
-      hashTable.set(officer.email, officer);
-      hashTable.set(officer.id, officer);
-    });
-    return hashTable;
-  }, [officers]);
-
   const filteredOfficers = useMemo(() => {
     return sortedOfficers.filter((officer) => {
       if (filter === "all") return true;
@@ -155,34 +132,86 @@ const OfficersList = () => {
     });
   }, [sortedOfficers, filter]);
 
+  // Check if user is super admin
+  if (userRole !== "super_admin") {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Access denied. Super admin privileges required.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   const handleDeleteOfficer = async (officerId: string, officerName: string, officerRole: string) => {
     try {
-      // Delete the officer role from user_roles
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", officerId)
-        .eq("role", officerRole);
+      console.log("Deleting officer:", { officerId, officerName, officerRole });
+
+      // Use RPC function to delete officer role (bypasses RLS)
+      const { data: deleteResult, error: roleError } = await supabase.rpc("delete_officer_role", {
+        _user_id: officerId,
+        _role: officerRole
+      });
 
       if (roleError) {
         console.error("Error deleting officer role:", roleError);
-        throw new Error(`Failed to delete officer: ${roleError.message}`);
+        throw new Error(`Failed to delete officer role: ${roleError.message}. Code: ${roleError.code}`);
       }
 
-      // Also delete from profiles (optional - you can remove this if you want to keep profile data)
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", officerId);
+      // The function returns a table with one row containing success, message, etc.
+      const result = Array.isArray(deleteResult) ? deleteResult[0] : deleteResult;
+      
+      if (!result || !result.success) {
+        const errorMsg = result?.message || "Failed to delete officer role";
+        console.error("Delete function returned error:", result);
+        throw new Error(errorMsg);
+      }
+
+      console.log("Role deleted successfully via function:", result);
+
+      // CRITICAL: Verify deletion actually happened by querying the database
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a moment for DB to update
+
+      const { data: verifyExists, error: verifyError } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", officerId)
+        .eq("role", officerRole)
+        .maybeSingle();
+
+      if (verifyExists) {
+        console.error("CRITICAL: Function returned success but row still exists!", verifyExists);
+        throw new Error("Delete function returned success but the row still exists in database. This indicates a database-level issue.");
+      }
+
+      console.log("Deletion verified - row no longer exists in database");
+
+      // Also delete from profiles using RPC function (bypasses RLS)
+      const { data: profileResult, error: profileError } = await supabase.rpc("delete_officer_profile", {
+        _user_id: officerId
+      });
 
       if (profileError) {
         console.warn("Could not delete profile:", profileError);
         // Continue anyway - the role deletion is what matters
+      } else {
+        const profileDeleteResult = Array.isArray(profileResult) ? profileResult[0] : profileResult;
+        if (profileDeleteResult?.success) {
+          console.log("Profile deleted successfully via function:", profileDeleteResult);
+        } else {
+          console.warn("Profile delete returned:", profileDeleteResult);
+        }
       }
 
       toast.success(`Officer ${officerName} has been removed`);
       
-      // Refresh the list
+      // Remove from local state immediately for instant UI update
+      setOfficers(prev => prev.filter(o => o.id !== officerId));
+      
+      // Then refresh from database to ensure consistency
       await fetchOfficers();
     } catch (error) {
       console.error("Error deleting officer:", error);
@@ -256,11 +285,13 @@ const OfficersList = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {loading && (
               <p className="text-center text-muted-foreground py-8">Loading...</p>
-            ) : filteredOfficers.length === 0 ? (
+            )}
+            {!loading && filteredOfficers.length === 0 && (
               <p className="text-center text-muted-foreground py-8">No officers found</p>
-            ) : (
+            )}
+            {!loading && filteredOfficers.length > 0 && (
               <div className="space-y-4">
                 {filteredOfficers.map((officer) => (
                   <div

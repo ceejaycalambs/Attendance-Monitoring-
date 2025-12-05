@@ -19,7 +19,7 @@ interface OfficerAccount {
 }
 
 const UserManagement = () => {
-  const { userRole, refreshRole, user } = useAuth();
+  const { userRole, refreshRole, user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -30,6 +30,18 @@ const UserManagement = () => {
     role: "rotc_officer",
     password: "",
   });
+
+  // Show loading while auth is initializing or role is being fetched
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1a7a3e] mx-auto"></div>
+          <p className="text-muted-foreground">Loading user role...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Check if user is super admin
   if (userRole !== "super_admin") {
@@ -65,22 +77,42 @@ const UserManagement = () => {
               <div className="mt-4 p-3 bg-muted rounded text-xs">
                 <p className="font-semibold mb-1">To fix this:</p>
                 <ol className="list-decimal list-inside space-y-1">
-                  <li>Make sure you're logged in as <code>crisajeancalamba@gmail.com</code></li>
+                  <li>Open your browser's Developer Console (Press F12) and check for error messages</li>
                   <li>Go to Supabase Dashboard → SQL Editor</li>
                   <li>Run this SQL to assign super_admin role:</li>
                 </ol>
                 <pre className="mt-2 p-2 bg-background rounded text-[10px] overflow-x-auto">
 {`-- First, add super_admin to enum if not exists
-ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'super_admin';
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum 
+    WHERE enumtypid = 'app_role'::regtype 
+    AND enumlabel = 'super_admin'
+  ) THEN
+    ALTER TYPE app_role ADD VALUE 'super_admin';
+  END IF;
+END $$;
 
 -- Then assign the role
 INSERT INTO user_roles (user_id, role)
 SELECT id, 'super_admin'::app_role
 FROM auth.users
-WHERE email = 'crisajeancalamba@gmail.com'
-ON CONFLICT (user_id, role) DO NOTHING;`}
+WHERE email = '${user?.email || 'crisajeancalamba@gmail.com'}'
+ON CONFLICT (user_id, role) DO NOTHING;
+
+-- Verify it was assigned
+SELECT u.email, ur.role 
+FROM auth.users u
+INNER JOIN user_roles ur ON ur.user_id = u.id
+WHERE u.email = '${user?.email || 'crisajeancalamba@gmail.com'}';`}
                 </pre>
-                <p className="mt-2 text-xs">After running the SQL, click "Refresh Role" above or refresh this page.</p>
+                <p className="mt-2 text-xs">
+                  <strong>After running the SQL:</strong>
+                  <br />1. Click "Refresh Role" button above
+                  <br />2. Or refresh this page (F5)
+                  <br />3. Check the browser console (F12) for any error messages
+                </p>
               </div>
             </div>
           </AlertDescription>

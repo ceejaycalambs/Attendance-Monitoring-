@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
-import { ScanLine, CheckCircle, XCircle, Camera, Clock, LogIn, LogOut } from "lucide-react";
+import { ScanLine, CheckCircle, XCircle, Camera, Clock, LogIn, LogOut, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useActiveEvent } from "@/hooks/useEvents";
 import { useRecordAttendance } from "@/hooks/useAttendance";
 import { useStudents, Student } from "@/hooks/useStudents";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { HashTable } from "@/utils/dataStructures/HashTable";
 import { Queue } from "@/utils/dataStructures/Queue";
 
@@ -27,6 +30,8 @@ interface ScanResult {
 }
 
 const Scanner = () => {
+  const { user, userRole } = useAuth();
+  const navigate = useNavigate();
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
@@ -35,10 +40,57 @@ const Scanner = () => {
   const [actionType, setActionType] = useState<"time_in" | "time_out">("time_in");
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
   const { data: students } = useStudents();
   const recordAttendance = useRecordAttendance();
+
+  // Check if user has officer role access (including super_admin)
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) {
+        setHasAccess(false);
+        return;
+      }
+
+      // Check if user has rotc_officer, usc_officer, or super_admin role
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .in("role", ["rotc_officer", "usc_officer", "super_admin"])
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking officer role:", error);
+        setHasAccess(false);
+        return;
+      }
+
+      if (data) {
+        setHasAccess(true);
+      } else {
+        // Also check userRole from context as fallback (for super_admin)
+        if (userRole === "super_admin") {
+          setHasAccess(true);
+        } else {
+          setHasAccess(false);
+          toast.error("Access denied. You no longer have officer privileges.");
+          setTimeout(() => {
+            navigate("/");
+          }, 2000);
+        }
+      }
+    };
+
+    checkAccess();
+    
+    // Check access periodically (every 30 seconds) to catch role deletions
+    const interval = setInterval(checkAccess, 30000);
+    
+    return () => clearInterval(interval);
+  }, [user, userRole, navigate]);
 
   // Create HashTable for O(1) student lookup by QR code
   const studentHashTable = useMemo(() => {
@@ -179,6 +231,37 @@ const Scanner = () => {
     // Auto-hide result after 3 seconds, but keep scanner running
     setTimeout(() => setScanResult(null), 3000);
   };
+
+  // Show access denied if user doesn't have officer role
+  if (hasAccess === false) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold">Access Denied</p>
+              <p>You no longer have officer privileges to access the scanner.</p>
+              <p className="text-sm">Redirecting to login...</p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  // Show loading while checking access
+  if (hasAccess === null) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center text-muted-foreground">Verifying access...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

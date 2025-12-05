@@ -54,3 +54,5 @@ LEFT JOIN public.user_roles ur ON ur.user_id = u.id
 WHERE u.email = auth.jwt() ->> 'email'
 OR ur.role = 'super_admin';
 
+
+
