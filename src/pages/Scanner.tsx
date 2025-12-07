@@ -86,11 +86,22 @@ const Scanner = () => {
       const officerRole = sessionStorage.getItem("officerRole");
       
       if (officerPin && officerRole) {
-        supabase.rpc("get_event_from_pin", {
+        // Use type assertion since function may not be in types yet
+        (supabase.rpc as any)("get_event_from_pin", {
           _pin: officerPin,
           _role: officerRole as "rotc_officer" | "usc_officer"
-        }).then(({ data: eventId, error }) => {
-          if (!error && eventId) {
+        }).then(({ data: eventId, error }: { data: string | null; error: any }) => {
+          // Handle 404 or other errors gracefully
+          if (error) {
+            console.warn("get_event_from_pin function not found or error:", error);
+            // Fallback to active event immediately
+            if (activeEvent) {
+              setSelectedEventId(activeEvent.id);
+            }
+            return;
+          }
+          
+          if (eventId && typeof eventId === 'string') {
             sessionStorage.setItem("officerEventId", eventId);
             const event = events.find(e => e.id === eventId);
             if (event) {
@@ -99,6 +110,13 @@ const Scanner = () => {
             }
           }
           
+          // Fallback to active event
+          if (activeEvent) {
+            setSelectedEventId(activeEvent.id);
+          }
+        }).catch((err: any) => {
+          // Catch any unexpected errors
+          console.error("Error calling get_event_from_pin:", err);
           // Fallback to active event
           if (activeEvent) {
             setSelectedEventId(activeEvent.id);
@@ -127,7 +145,7 @@ const Scanner = () => {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
-        .in("role", ["rotc_officer", "usc_officer", "super_admin"])
+        .in("role", ["rotc_officer", "usc_officer", "super_admin"] as any[])
         .maybeSingle();
 
       if (error) {

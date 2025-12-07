@@ -144,20 +144,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (data) {
-      // Get event_id from PIN
-      const { data: eventId, error: eventError } = await supabase.rpc("get_event_from_pin", {
-        _pin: pin,
-        _role: role
-      });
-
       // Store PIN session in sessionStorage (temporary for scanning session)
       sessionStorage.setItem("officerEmail", email);
       sessionStorage.setItem("officerPin", pin);
       sessionStorage.setItem("officerRole", role);
       
-      // Store event_id if available
-      if (eventId && !eventError) {
-        sessionStorage.setItem("officerEventId", eventId);
+      // Try to get event_id from PIN (handle gracefully if function doesn't exist)
+      try {
+        // Use type assertion since function may not be in types yet
+        const { data: eventId, error: eventError } = await (supabase.rpc as any)("get_event_from_pin", {
+          _pin: pin,
+          _role: role
+        }) as { data: string | null; error: any };
+
+        // Store event_id if available and no error
+        if (eventId && typeof eventId === 'string' && !eventError) {
+          sessionStorage.setItem("officerEventId", eventId);
+        } else if (eventError) {
+          // Log warning but don't fail login - scanner will fallback to active event
+          console.warn("get_event_from_pin function not found or error:", eventError);
+        }
+      } catch (err) {
+        // Catch any unexpected errors (like 404)
+        console.warn("Error calling get_event_from_pin:", err);
+        // Continue with login - scanner will use active event as fallback
       }
 
       return { success: true };
