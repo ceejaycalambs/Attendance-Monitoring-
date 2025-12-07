@@ -91,23 +91,43 @@ export const useRecordAttendance = () => {
           .limit(1)
           .maybeSingle();
 
-        if (!existingRecord) {
-          throw new Error(`No active ${timePeriod === "morning" ? "AM" : "PM"} time in found for this student`);
+        if (existingRecord) {
+          // Update existing record with time out
+          const { data, error } = await supabase
+            .from("attendance_records")
+            .update({ 
+              time_out: new Date().toISOString(),
+              status: "left" 
+            })
+            .eq("id", existingRecord.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+          return { action: "time_out", data };
+        } else {
+          // No time in record found for this period - create a new record with time out
+          // This allows recording time out even if time in was skipped
+          // Set time_in to 1 minute before time_out to indicate they were present
+          const now = new Date();
+          const timeIn = new Date(now.getTime() - 60000); // 1 minute before
+
+          const { data, error } = await supabase
+            .from("attendance_records")
+            .insert({
+              student_id: studentId,
+              event_id: eventId,
+              time_period: timePeriod,
+              status: "left",
+              time_in: timeIn.toISOString(),
+              time_out: now.toISOString(),
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+          return { action: "time_out", data };
         }
-
-        // Update with time out
-        const { data, error } = await supabase
-          .from("attendance_records")
-          .update({ 
-            time_out: new Date().toISOString(),
-            status: "left" 
-          })
-          .eq("id", existingRecord.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return { action: "time_out", data };
       }
     },
     onSuccess: (result) => {
