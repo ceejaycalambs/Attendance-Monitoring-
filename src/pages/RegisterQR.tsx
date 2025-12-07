@@ -98,7 +98,14 @@ const RegisterQR = () => {
       toast.success("QR Code generated successfully!");
     } catch (error) {
       console.error("Error:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to register");
+      // Check if it's a duplicate student_id error
+      if (error instanceof Error && 
+          error.message?.includes("duplicate key value violates unique constraint") && 
+          error.message?.includes("students_student_id_key")) {
+        toast.error("Student Id already registered");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to register");
+      }
     } finally {
       setLoading(false);
     }

@@ -58,3 +58,4 @@ GRANT EXECUTE ON FUNCTION public.validate_daily_pin(TEXT, TEXT, app_role) TO ano
 
 
 
+

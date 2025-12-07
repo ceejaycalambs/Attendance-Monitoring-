@@ -371,13 +371,13 @@ const Students = () => {
                         <div className="flex items-start justify-between">
                           <div className="space-y-1 flex-1">
                             <h3 className="font-semibold">{student.name}</h3>
-                            <p className="text-sm text-muted-foreground">{student.student_id}</p>
+                            <p className="text-sm text-muted-foreground">{student.student_id.replace(/^STU-/, '')}</p>
                             <p className="text-xs text-muted-foreground">{student.department || "Not Set"}</p>
                             <p className="text-xs text-muted-foreground">{student.program || "Not Set"}</p>
                           </div>
                           <Badge variant="outline" className="flex items-center gap-1">
                             <QrCode className="h-3 w-3" />
-                            {student.qr_code}
+                            {student.qr_code.replace(/QR-STU-/, 'QR-')}
                           </Badge>
                         </div>
                         {isSuperAdmin && (
@@ -468,7 +468,7 @@ const Students = () => {
                     <Label className="text-sm font-medium text-muted-foreground">Current QR Code</Label>
                     <Badge variant="outline" className="mt-1">
                       <QrCode className="h-3 w-3 mr-1" />
-                      {selectedStudent.qr_code}
+                      {selectedStudent.qr_code.replace(/QR-STU-/, 'QR-')}
                     </Badge>
                   </div>
                 </CardContent>

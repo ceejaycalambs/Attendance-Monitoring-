@@ -24,3 +24,4 @@ FROM public.user_roles
 WHERE user_id = auth.uid();
 
 
+

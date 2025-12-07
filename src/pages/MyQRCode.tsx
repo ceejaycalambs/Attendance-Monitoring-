@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Download, QrCode, User } from "lucide-react";
+import { Download, QrCode, User, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,17 +20,46 @@ interface StudentData {
 }
 
 const MyQRCode = () => {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [student, setStudent] = useState<StudentData | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isOfficer, setIsOfficer] = useState<boolean | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Check if user is an officer
   useEffect(() => {
+    const checkIfOfficer = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .in("role", ["rotc_officer", "usc_officer", "super_admin"])
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking role:", error);
+        setIsOfficer(false);
+        return;
+      }
+
+      setIsOfficer(!!data || userRole === "super_admin" || userRole === "rotc_officer" || userRole === "usc_officer");
+    };
+
     if (user) {
-      fetchStudentData();
+      checkIfOfficer();
     }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, userRole]);
+
+  useEffect(() => {
+    if (user && isOfficer === false) {
+      fetchStudentData();
+    } else if (user && isOfficer === true) {
+      setLoading(false);
+    }
+  }, [user, isOfficer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStudentData = async () => {
     if (!user) return;
@@ -48,8 +78,8 @@ const MyQRCode = () => {
         setStudent(existingStudent);
         generateQRCode(existingStudent.qr_code);
       } else {
-        // Create student record if it doesn't exist
-        await createStudentRecord();
+        // Don't auto-create for officers - they must be manually added
+        setStudent(null);
       }
     } catch (error) {
       console.error("Error fetching student data:", error);
@@ -135,6 +165,37 @@ const MyQRCode = () => {
     );
   }
 
+  // Show message for officers
+  if (isOfficer) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div>
+            <h1 className="text-3xl font-bold text-primary">My QR Code</h1>
+            <p className="text-muted-foreground">Your personal QR code for event attendance</p>
+          </div>
+        </motion.div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold">QR codes are not available for officers</p>
+              <p className="text-sm">
+                Officers do not automatically receive QR codes. If you need a QR code for attendance tracking, 
+                please contact an administrator to manually add you to the Students page.
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <motion.div
@@ -148,7 +209,20 @@ const MyQRCode = () => {
         </div>
       </motion.div>
 
-      {student && (
+      {!student ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold">No student record found</p>
+              <p className="text-sm">
+                You don't have a student record yet. Please contact an administrator to add you to the Students page 
+                to receive a QR code.
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : (
         <div className="grid gap-6 md:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -170,7 +244,7 @@ const MyQRCode = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Student ID</label>
-                  <p className="text-lg font-semibold">{student.student_id}</p>
+                  <p className="text-lg font-semibold">{student.student_id.replace(/^STU-/, '')}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Department</label>
@@ -184,7 +258,7 @@ const MyQRCode = () => {
                   <label className="text-sm font-medium text-muted-foreground">QR Code</label>
                   <Badge variant="outline" className="mt-1">
                     <QrCode className="h-3 w-3 mr-1" />
-                    {student.qr_code}
+                    {student.qr_code.replace(/QR-STU-/, 'QR-')}
                   </Badge>
                 </div>
               </CardContent>
@@ -236,30 +310,32 @@ const MyQRCode = () => {
         </div>
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.6 }}
-      >
-        <Card className="bg-accent/5 border-accent/20">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <div className="bg-accent/10 p-3 rounded-full">
-                <QrCode className="h-6 w-6 text-accent" />
+      {student && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+        >
+          <Card className="bg-accent/5 border-accent/20">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-accent/10 p-3 rounded-full">
+                  <QrCode className="h-6 w-6 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-2">How to Use Your QR Code</h3>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>• Download and save your QR code to your device</li>
+                    <li>• Print it or show it on your phone screen at events</li>
+                    <li>• Officers will scan it to record your attendance</li>
+                    <li>• One QR code works for all events - no need to register multiple times</li>
+                  </ul>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold mb-2">How to Use Your QR Code</h3>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  <li>• Download and save your QR code to your device</li>
-                  <li>• Print it or show it on your phone screen at events</li>
-                  <li>• Officers will scan it to record your attendance</li>
-                  <li>• One QR code works for all events - no need to register multiple times</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </div>
   );
 };

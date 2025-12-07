@@ -10,6 +10,7 @@ import { useAttendanceByEvent } from "@/hooks/useAttendance";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { useQuery } from "@tanstack/react-query";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -17,15 +18,41 @@ const Dashboard = () => {
   const staffName = user?.email?.split("@")[0] || sessionStorage.getItem("staffName") || "Staff Member";
   const isSuperAdmin = userRole === "super_admin";
   
+  // State for current time (updates every second)
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
   // Fetch real data
   const { data: events = [], isLoading: eventsLoading } = useEvents();
   const { data: activeEvent, isLoading: activeEventLoading } = useActiveEvent();
   const { data: attendanceRecords = [], isLoading: attendanceLoading } = useAttendanceByEvent(activeEvent?.id || null);
   
+  // Fetch all attendance records for all events (for Event Status section)
+  const { data: allAttendanceRecords = [] } = useQuery({
+    queryKey: ["all-attendance"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("attendance_records")
+        .select("id, event_id, student_id");
+      
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  
   // State for real-time updates (initialized from queries, updated by subscriptions)
   const [realtimeEvents, setRealtimeEvents] = useState(events);
   const [realtimeActiveEvent, setRealtimeActiveEvent] = useState(activeEvent);
   const [realtimeAttendance, setRealtimeAttendance] = useState(attendanceRecords);
+  const [realtimeAllAttendance, setRealtimeAllAttendance] = useState(allAttendanceRecords);
 
   // Update state when query data changes (using refs to prevent infinite loops)
   const prevEventsRef = useRef<string>('');
@@ -57,6 +84,11 @@ const Dashboard = () => {
       prevAttendanceLengthRef.current = attendanceRecords.length;
     }
   }, [attendanceRecords]);
+
+  // Update realtimeAllAttendance when allAttendanceRecords changes
+  useEffect(() => {
+    setRealtimeAllAttendance(allAttendanceRecords);
+  }, [allAttendanceRecords]);
 
   // Set up real-time subscriptions
   useEffect(() => {
@@ -110,7 +142,7 @@ const Dashboard = () => {
           console.log("Attendance change received:", payload);
           const record = payload.new || payload.old;
           
-          // Only process if it's for the active event
+          // Update active event attendance
           if (activeEventId && record?.event_id === activeEventId) {
             if (payload.eventType === "INSERT") {
               setRealtimeAttendance((prev) => {
@@ -128,6 +160,20 @@ const Dashboard = () => {
               setRealtimeAttendance((prev) => prev.filter((r) => r.id !== payload.old.id));
             }
           }
+
+          // Update all attendance records for Event Status section
+          if (payload.eventType === "INSERT") {
+            setRealtimeAllAttendance((prev) => {
+              const newRecord = payload.new as any;
+              // Check if already exists to avoid duplicates
+              if (prev.some((r: any) => r.id === newRecord.id)) return prev;
+              return [...prev, { id: newRecord.id, event_id: newRecord.event_id, student_id: newRecord.student_id }];
+            });
+          } else if (payload.eventType === "DELETE") {
+            setRealtimeAllAttendance((prev) => 
+              prev.filter((r: any) => r.id !== payload.old.id)
+            );
+          }
         }
       )
       .subscribe();
@@ -138,9 +184,13 @@ const Dashboard = () => {
     };
   }, [activeEvent?.id]); // Only depend on activeEvent?.id, not realtimeActiveEvent
 
-  // Calculate stats from real data
+  // Calculate stats from real data - count unique students, not total records
   const currentAttendance = useMemo(() => {
-    return realtimeAttendance.filter((a) => a.status === "present").length;
+    const presentRecords = realtimeAttendance.filter((a) => a.status === "present");
+    const uniqueStudentIds = new Set(
+      presentRecords.map((a) => a.student_id || a.students?.student_id).filter(Boolean)
+    );
+    return uniqueStudentIds.size;
   }, [realtimeAttendance]);
 
   const todaysEvents = useMemo(() => {
@@ -181,7 +231,8 @@ const Dashboard = () => {
     },
     {
       title: "Calendar",
-      value: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      value: currentTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      time: currentTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
       icon: CalendarDays,
       color: "text-warning",
       bg: "bg-warning/10",
@@ -237,7 +288,12 @@ const Dashboard = () => {
                 {stat.loading ? (
                   <div className="text-2xl font-bold text-foreground animate-pulse">Loading...</div>
                 ) : (
-                  <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+                  <div>
+                    <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+                    {stat.time && (
+                      <div className="text-sm font-medium text-muted-foreground mt-1">{stat.time}</div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -304,9 +360,14 @@ const Dashboard = () => {
               <div className="space-y-4">
                 {realtimeEvents.map((event) => {
                   const eventDate = new Date(event.date);
-                  const eventAttendance = realtimeAttendance.filter(
-                    (a) => a.event_id === event.id
-                  ).length;
+                  // Count unique students for this event from all attendance records
+                  const eventRecords = realtimeAllAttendance.filter(
+                    (a: any) => a.event_id === event.id
+                  );
+                  const uniqueStudentIds = new Set(
+                    eventRecords.map((a: any) => a.student_id).filter(Boolean)
+                  );
+                  const eventAttendance = uniqueStudentIds.size;
                   
                   return (
                     <div

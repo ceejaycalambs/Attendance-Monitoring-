@@ -1,16 +1,27 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { signOut } = useAuth();
+  const { signOut, userRole } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isOfficer = userRole === "rotc_officer" || userRole === "usc_officer";
+
+  // Redirect officers to scanner if they try to access other pages
+  useEffect(() => {
+    if (isOfficer && location.pathname !== "/scanner") {
+      navigate("/scanner", { replace: true });
+    }
+  }, [isOfficer, location.pathname, navigate]);
 
   return (
     <SidebarProvider>

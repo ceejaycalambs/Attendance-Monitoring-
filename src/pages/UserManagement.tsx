@@ -141,88 +141,144 @@ WHERE u.email = '${user?.email || 'crisajeancalamba@gmail.com'}';`}
         throw new Error("Password must be at least 6 characters");
       }
 
-      // Step 1: Create auth user using signUp (will be auto-confirmed by trigger)
+      // Step 1: Try to create auth user using signUp
+      // Note: Email confirmation must be disabled in Supabase Dashboard → Authentication → Settings
+      const normalizedEmail = formData.email.toLowerCase().trim();
+      
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email.toLowerCase().trim(),
+        email: normalizedEmail,
         password: formData.password,
         options: {
           data: {
             name: formData.name,
           },
-          emailRedirectTo: `${window.location.origin}/`,
         },
       });
 
-      if (authError) {
-        console.error("Auth error details:", authError);
-        // Provide more helpful error messages
-        if (authError.message.includes("already registered") || 
-            authError.message.includes("already exists") || 
-            authError.message.includes("User already registered") ||
-            authError.message.includes("email address is already")) {
-          throw new Error("Already registered");
+      let userId: string | null = null;
+      let isRestored = false;
+
+      // If user already exists, try to restore their account
+      if (authError && (
+        authError.message.includes("already registered") || 
+        authError.message.includes("already exists") || 
+        authError.message.includes("User already registered") ||
+        authError.message.includes("email address is already")
+      )) {
+        console.log("User already exists, attempting to restore account...");
+        
+        // Use RPC function to restore the account
+        const { data: restoreResult, error: restoreError } = await supabase.rpc("restore_officer_account", {
+          _email: normalizedEmail,
+          _name: formData.name,
+          _role: formData.role
+        });
+
+        if (restoreError) {
+          console.error("Restore error:", restoreError);
+          throw new Error(`Account exists but could not be restored: ${restoreError.message}. Please contact an administrator.`);
         }
+
+        const result = Array.isArray(restoreResult) ? restoreResult[0] : restoreResult;
+        
+        if (result && result.success) {
+          // Use restored_user_id from the function return, fallback to user_id for compatibility
+          userId = result.restored_user_id || result.user_id;
+          isRestored = true;
+          console.log("Account restored successfully:", result);
+        } else {
+          const errorMsg = result?.message || "Failed to restore account";
+          throw new Error(errorMsg);
+        }
+      } else if (authError) {
+        console.error("Auth error details:", authError);
         if (authError.message.includes("password")) {
           throw new Error("Password does not meet requirements. Please use a stronger password.");
         }
         throw new Error(`Failed to create account: ${authError.message}`);
+      } else if (authData?.user) {
+        // New user created successfully
+        userId = authData.user.id;
       }
 
-      if (!authData.user) {
-        throw new Error("Failed to create user. The user may need email confirmation. Check Supabase settings.");
+      if (!userId) {
+        throw new Error("Failed to get user ID. Please try again.");
       }
 
-      // Step 2: Update profile name
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ name: formData.name })
-        .eq("id", authData.user.id);
-
-      if (profileError) {
-        console.error("Profile update error:", profileError);
-        // Continue anyway as profile might be created by trigger
-      }
-
-      // Step 3: Assign role (remove student role first if exists, then add officer role)
-      // First, remove the default student role that was auto-assigned
-      const { error: deleteStudentRoleError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", authData.user.id)
-        .eq("role", "student");
-
-      if (deleteStudentRoleError) {
-        console.warn("Could not remove student role:", deleteStudentRoleError);
-        // Continue anyway
-      }
-
-      // Then assign the officer role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .upsert({
-          user_id: authData.user.id,
-          role: formData.role,
-        }, {
-          onConflict: "user_id,role"
+      // Step 2 & 3: Only create/update profile and role if this is a new account
+      // If account was restored, the restore function already handled profile and role
+      if (!isRestored) {
+        // Step 2: Upsert profile name using RPC function (bypasses RLS)
+        // This ensures the profile is created/updated correctly even if it was deleted
+        const { data: profileResult, error: profileError } = await supabase.rpc("upsert_officer_profile", {
+          _user_id: userId,
+          _name: formData.name
         });
 
-      if (roleError) {
-        console.error("Role assignment error:", roleError);
-        // Check if it's a foreign key constraint error (user already exists)
-        if (roleError.message.includes("foreign key constraint") || 
-            roleError.message.includes("user_roles_user_id_fkey") ||
-            roleError.message.includes("violates foreign key")) {
-          throw new Error("Already registered");
+        if (profileError) {
+          console.error("Profile upsert error:", profileError);
+          // Fallback: Try direct upsert
+          const { error: directError } = await supabase
+            .from("profiles")
+            .upsert({ 
+              id: userId,
+              name: formData.name 
+            }, {
+              onConflict: "id"
+            });
+          
+          if (directError) {
+            console.error("Direct profile upsert also failed:", directError);
+            // Continue anyway - the trigger should have created it, but name might be wrong
+          }
+        } else {
+          const result = Array.isArray(profileResult) ? profileResult[0] : profileResult;
+          if (result?.success) {
+            console.log("Profile created/updated successfully:", result);
+          }
         }
-        throw new Error(`Failed to assign role: ${roleError.message}. Make sure the role enum includes ${formData.role}.`);
+
+        // Step 3: Assign role (remove student role first if exists, then add officer role)
+        // First, remove the default student role that was auto-assigned
+        const { error: deleteStudentRoleError } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("role", "student");
+
+        if (deleteStudentRoleError) {
+          console.warn("Could not remove student role:", deleteStudentRoleError);
+          // Continue anyway
+        }
+
+        // Then assign the officer role
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .upsert({
+            user_id: userId,
+            role: formData.role,
+          }, {
+            onConflict: "user_id,role"
+          });
+
+        if (roleError) {
+          console.error("Role assignment error:", roleError);
+          // Check if it's a foreign key constraint error (user already exists)
+          if (roleError.message.includes("foreign key constraint") || 
+              roleError.message.includes("user_roles_user_id_fkey") ||
+              roleError.message.includes("violates foreign key")) {
+            throw new Error("Already registered");
+          }
+          throw new Error(`Failed to assign role: ${roleError.message}. Make sure the role enum includes ${formData.role}.`);
+        }
       }
 
 
-      // Check if email confirmation is required
-      if (authData.user && !authData.session) {
-        toast.success(`Account created for ${formData.name}! Email confirmation may be required.`);
+      // Show success message
+      if (isRestored) {
+        toast.success(`Officer account restored for ${formData.name}! Note: The password was not changed. User must use password reset if needed.`);
       } else {
-        toast.success(`Account created successfully for ${formData.name}!`);
+        toast.success(`Officer account created successfully for ${formData.name}! They can now log in.`);
       }
       
       setSuccess(true);
@@ -439,6 +495,7 @@ WHERE u.email = '${user?.email || 'crisajeancalamba@gmail.com'}';`}
                   <li>• The officer will receive an account with the email and password you set</li>
                   <li>• They can log in using their email and password</li>
                   <li>• Officers can access the scanner using their email and password</li>
+                  <li>• <strong>Note:</strong> QR codes are NOT created automatically. If an officer needs a QR code, they must be manually added to the Students page.</li>
                 </ul>
               </div>
             </div>

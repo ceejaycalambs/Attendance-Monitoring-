@@ -168,3 +168,4 @@ GRANT EXECUTE ON FUNCTION public.delete_officer_profile(UUID) TO authenticated;
 -- 4. Returns detailed error if deletion fails
 -- ============================================
 
+

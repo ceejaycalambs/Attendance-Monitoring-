@@ -20,7 +20,7 @@ const SuperAdminLogin = () => {
   // Redirect if already logged in as super admin
   useEffect(() => {
     if (user && userRole === "super_admin") {
-      navigate("/user-management");
+      navigate("/dashboard");
     }
   }, [user, userRole, navigate]);
 
@@ -50,10 +50,10 @@ const SuperAdminLogin = () => {
         setLoading(false);
       } else {
         toast.success("Welcome, Super Admin!");
-        // Redirect to user-management page (super admin dashboard)
+        // Redirect to dashboard
         // Wait a moment for role to be fetched by AuthContext
         setTimeout(() => {
-          navigate("/user-management");
+          navigate("/dashboard");
         }, 500);
         setLoading(false);
       }

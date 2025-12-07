@@ -36,16 +36,21 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { userRole, signOut } = useAuth();
   const isSuperAdmin = userRole === "super_admin";
+  const isOfficer = userRole === "rotc_officer" || userRole === "usc_officer";
 
   const handleLogout = async () => {
     await signOut();
     navigate("/");
   };
 
-  // Filter out "My QR Code" for super admins
-  const filteredItems = isSuperAdmin 
-    ? items.filter(item => item.title !== "My QR Code")
-    : items;
+  // For officers: only show "Scan ID"
+  // For super admins: show all except "My QR Code"
+  // For students: show all
+  const filteredItems = isOfficer
+    ? items.filter(item => item.title === "Scan ID")
+    : (isSuperAdmin
+      ? items.filter(item => item.title !== "My QR Code")
+      : items);
 
   return (
     <Sidebar className={`${open ? "w-60" : "w-14"} bg-white border-r border-border`} collapsible="icon">

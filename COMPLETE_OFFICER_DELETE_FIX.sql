@@ -137,3 +137,4 @@ SELECT COUNT(*) as total_user_roles FROM public.user_roles;
 -- Both need DELETE policies for super_admin!
 
 
+

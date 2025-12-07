@@ -47,3 +47,4 @@ ORDER BY policyname;
 -- SELECT role FROM public.user_roles WHERE user_id = 'YOUR_USER_ID_HERE';
 
 
+

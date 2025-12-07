@@ -151,6 +151,8 @@ const OfficersList = () => {
       console.log("Deleting officer:", { officerId, officerName, officerRole });
 
       // Use RPC function to delete officer role (bypasses RLS)
+      // Note: This deletes from user_roles and profiles, but NOT from auth.users
+      // To completely remove from auth.users, delete manually from Supabase Dashboard
       const { data: deleteResult, error: roleError } = await supabase.rpc("delete_officer_role", {
         _user_id: officerId,
         _role: officerRole
@@ -173,21 +175,47 @@ const OfficersList = () => {
       console.log("Role deleted successfully via function:", result);
 
       // CRITICAL: Verify deletion actually happened by querying the database
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a moment for DB to update
+      // Wait longer and check multiple times to ensure transaction is committed
+      let verified = false;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between checks
 
-      const { data: verifyExists, error: verifyError } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", officerId)
-        .eq("role", officerRole)
-        .maybeSingle();
+        const { data: verifyExists, error: verifyError } = await supabase
+          .from("user_roles")
+          .select("id, user_id, role")
+          .eq("user_id", officerId)
+          .eq("role", officerRole)
+          .maybeSingle();
 
-      if (verifyExists) {
-        console.error("CRITICAL: Function returned success but row still exists!", verifyExists);
-        throw new Error("Delete function returned success but the row still exists in database. This indicates a database-level issue.");
+        if (verifyError) {
+          console.warn(`Verification attempt ${attempt + 1} error:`, verifyError);
+          // Continue to next attempt
+          continue;
+        }
+
+        if (!verifyExists) {
+          verified = true;
+          console.log(`Deletion verified on attempt ${attempt + 1} - row no longer exists in database`);
+          break;
+        } else {
+          console.warn(`Verification attempt ${attempt + 1}: Row still exists:`, verifyExists);
+        }
       }
 
-      console.log("Deletion verified - row no longer exists in database");
+      if (!verified) {
+        // Final check after all attempts
+        const { data: finalCheck, error: finalError } = await supabase
+          .from("user_roles")
+          .select("id, user_id, role")
+          .eq("user_id", officerId)
+          .eq("role", officerRole)
+          .maybeSingle();
+
+        if (finalCheck) {
+          console.error("CRITICAL: Function returned success but row still exists after all verification attempts!", finalCheck);
+          throw new Error("Delete function returned success but the row still exists in database after multiple verification attempts. This indicates a database-level issue or the row was recreated.");
+        }
+      }
 
       // Also delete from profiles using RPC function (bypasses RLS)
       const { data: profileResult, error: profileError } = await supabase.rpc("delete_officer_profile", {
@@ -206,13 +234,26 @@ const OfficersList = () => {
         }
       }
 
-      toast.success(`Officer ${officerName} has been removed`);
-      
       // Remove from local state immediately for instant UI update
       setOfficers(prev => prev.filter(o => o.id !== officerId));
       
       // Then refresh from database to ensure consistency
       await fetchOfficers();
+      
+      // Final verification after refresh - check if officer still appears in the list
+      const { data: finalOfficerCheck } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", officerId)
+        .eq("role", officerRole)
+        .maybeSingle();
+
+      if (finalOfficerCheck) {
+        console.error("CRITICAL: Officer still exists after refresh!", finalOfficerCheck);
+        toast.error("Warning: Officer deletion may not have persisted. Please check the database.");
+      } else {
+        toast.success(`Officer ${officerName} has been removed`);
+      }
     } catch (error) {
       console.error("Error deleting officer:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to delete officer";

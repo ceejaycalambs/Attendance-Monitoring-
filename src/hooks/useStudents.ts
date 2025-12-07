@@ -24,13 +24,42 @@ export const useStudents = () => {
   return useQuery({
     queryKey: ["students"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch all students
+      const { data: allStudents, error: studentsError } = await supabase
         .from("students")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return data as Student[];
+      if (studentsError) throw studentsError;
+      if (!allStudents || allStudents.length === 0) return [];
+
+      // Fetch all user roles to identify officers
+      const { data: userRoles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+
+      if (rolesError) {
+        console.error("Error fetching user roles:", rolesError);
+        // If we can't fetch roles, return all students (fail-safe)
+        return allStudents as Student[];
+      }
+
+      // Create a set of user IDs that are officers
+      const officerUserIds = new Set<string>();
+      if (userRoles) {
+        userRoles.forEach((ur) => {
+          if (ur.role === "rotc_officer" || ur.role === "usc_officer" || ur.role === "super_admin") {
+            officerUserIds.add(ur.user_id);
+          }
+        });
+      }
+
+      // Filter out students who are officers
+      const filteredStudents = allStudents.filter(
+        (student) => !officerUserIds.has(student.id)
+      );
+
+      return filteredStudents as Student[];
     },
   });
 };
@@ -62,7 +91,13 @@ export const useCreateStudent = () => {
       toast.success("Student added successfully");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to add student");
+      // Check if it's a duplicate student_id error
+      if (error.message?.includes("duplicate key value violates unique constraint") && 
+          error.message?.includes("students_student_id_key")) {
+        toast.error("Student Id already registered");
+      } else {
+        toast.error(error.message || "Failed to add student");
+      }
     },
   });
 };
@@ -114,7 +149,13 @@ export const useUpdateStudent = () => {
       toast.success("Student updated successfully");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update student");
+      // Check if it's a duplicate student_id error
+      if (error.message?.includes("duplicate key value violates unique constraint") && 
+          error.message?.includes("students_student_id_key")) {
+        toast.error("Student Id already registered");
+      } else {
+        toast.error(error.message || "Failed to update student");
+      }
     },
   });
 };

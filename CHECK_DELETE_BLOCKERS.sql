@@ -103,3 +103,4 @@ WHERE constraint_schema = 'public'
       AND constraint_type = 'CHECK'
   );
 
+

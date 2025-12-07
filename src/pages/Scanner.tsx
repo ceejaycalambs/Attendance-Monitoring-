@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
-import { ScanLine, CheckCircle, XCircle, Camera, Clock, LogIn, LogOut, AlertCircle } from "lucide-react";
+import { ScanLine, CheckCircle, XCircle, Camera, Clock, LogIn, LogOut, AlertCircle, Calendar } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useActiveEvent } from "@/hooks/useEvents";
+import { useActiveEvent, useEvents, Event } from "@/hooks/useEvents";
 import { useRecordAttendance } from "@/hooks/useAttendance";
 import { useStudents, Student } from "@/hooks/useStudents";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { HashTable } from "@/utils/dataStructures/HashTable";
 import { Queue } from "@/utils/dataStructures/Queue";
+import { format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ScanResult {
   success: boolean;
@@ -27,11 +29,13 @@ interface ScanResult {
     program: string;
   };
   message: string;
+  timestamp?: string;
 }
 
 const Scanner = () => {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
+  const isOfficer = userRole === "rotc_officer" || userRole === "usc_officer";
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
@@ -41,10 +45,74 @@ const Scanner = () => {
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
 
   const { data: activeEvent, isLoading: eventLoading } = useActiveEvent();
+  const { data: events = [], isLoading: eventsLoading } = useEvents();
   const { data: students } = useStudents();
   const recordAttendance = useRecordAttendance();
+
+  // Get the selected event object
+  const selectedEvent = useMemo(() => {
+    if (!selectedEventId) return activeEvent || null;
+    return events.find((e) => e.id === selectedEventId) || null;
+  }, [selectedEventId, events, activeEvent]);
+
+  // Set default event: first check if officer has event from PIN, then use active event
+  useEffect(() => {
+    if (!isOfficer) {
+      // For non-officers, just use active event
+      if (activeEvent && !selectedEventId) {
+        setSelectedEventId(activeEvent.id);
+      }
+      return;
+    }
+
+    // For officers: check if they logged in with PIN and have event_id stored
+    const officerEventId = sessionStorage.getItem("officerEventId");
+    if (officerEventId && !selectedEventId) {
+      // Verify the event still exists and is valid
+      const event = events.find(e => e.id === officerEventId);
+      if (event) {
+        setSelectedEventId(officerEventId);
+        return;
+      }
+    }
+    
+    // If no event from PIN, try to fetch it again (in case function wasn't called during login)
+    if (!officerEventId && !selectedEventId && events.length > 0) {
+      // Try to get event from PIN via RPC call
+      const officerPin = sessionStorage.getItem("officerPin");
+      const officerRole = sessionStorage.getItem("officerRole");
+      
+      if (officerPin && officerRole) {
+        supabase.rpc("get_event_from_pin", {
+          _pin: officerPin,
+          _role: officerRole as "rotc_officer" | "usc_officer"
+        }).then(({ data: eventId, error }) => {
+          if (!error && eventId) {
+            sessionStorage.setItem("officerEventId", eventId);
+            const event = events.find(e => e.id === eventId);
+            if (event) {
+              setSelectedEventId(eventId);
+              return;
+            }
+          }
+          
+          // Fallback to active event
+          if (activeEvent) {
+            setSelectedEventId(activeEvent.id);
+          }
+        });
+      } else if (activeEvent) {
+        // No PIN stored, use active event
+        setSelectedEventId(activeEvent.id);
+      }
+    } else if (activeEvent && !selectedEventId) {
+      // Fallback to active event
+      setSelectedEventId(activeEvent.id);
+    }
+  }, [activeEvent, selectedEventId, events, isOfficer]);
 
   // Check if user has officer role access (including super_admin)
   useEffect(() => {
@@ -159,8 +227,8 @@ const Scanner = () => {
   };
 
   const handleScan = async (qrCode: string) => {
-    if (!activeEvent) {
-      toast.error("No active event");
+    if (!selectedEvent) {
+      toast.error("Please select an event first");
       return;
     }
 
@@ -201,12 +269,12 @@ const Scanner = () => {
   };
 
   const processScan = async (student: Student) => {
-    if (!activeEvent) return;
+    if (!selectedEvent) return;
 
     // Record attendance with time period and explicit action type
     await recordAttendance.mutateAsync({
       studentId: student.id,
-      eventId: activeEvent.id,
+      eventId: selectedEvent.id,
       timePeriod: timePeriod,
       actionType: actionType,
     });
@@ -215,6 +283,10 @@ const Scanner = () => {
     const message = actionType === "time_in" 
       ? `${periodLabel} Time In Recorded` 
       : `${periodLabel} Time Out Recorded`;
+
+    // Get current date and time
+    const now = new Date();
+    const dateTime = format(now, "MMMM d, yyyy 'at' h:mm:ss a");
 
     setScanResult({
       success: true,
@@ -225,6 +297,7 @@ const Scanner = () => {
         program: student.program,
       },
       message,
+      timestamp: dateTime,
     });
 
     toast.success(`${student.name} - ${message}`);
@@ -277,13 +350,70 @@ const Scanner = () => {
               QR Code Scanner
             </CardTitle>
             <CardDescription>
-              Scan student IDs to record attendance for:{" "}
-              <strong>{eventLoading ? "Loading..." : activeEvent?.name || "No active event"}</strong>
+              {isOfficer 
+                ? "Scan student IDs to record attendance. Event is automatically selected based on your PIN."
+                : "Select an event and scan student IDs to record attendance"}
               <br />
               <span className="text-xs text-muted-foreground">
                 Using HashTable for O(1) student lookups • Queue for managing scan operations
               </span>
             </CardDescription>
+            {!isOfficer && (
+              <div className="mt-4 space-y-2">
+                <Label htmlFor="event-select">Select Event</Label>
+                <Select
+                  value={selectedEventId}
+                  onValueChange={setSelectedEventId}
+                  disabled={eventsLoading}
+                >
+                  <SelectTrigger id="event-select" className="w-full">
+                    <SelectValue placeholder={eventsLoading ? "Loading events..." : "Select an event"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {events.map((event) => (
+                      <SelectItem key={event.id} value={event.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{event.name}</span>
+                          <Badge
+                            variant={
+                              event.status === "active"
+                                ? "default"
+                                : event.status === "completed"
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className={`ml-2 ${
+                              event.status === "active" ? "bg-success text-white" : ""
+                            }`}
+                          >
+                            {event.status}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedEvent && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: <strong>{selectedEvent.name}</strong> - {format(new Date(selectedEvent.date), "MMM d, yyyy")}
+                  </p>
+                )}
+              </div>
+            )}
+            {isOfficer && selectedEvent && (
+              <div className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Event automatically selected: <strong>{selectedEvent.name}</strong> - {format(new Date(selectedEvent.date), "MMM d, yyyy")}
+                </p>
+              </div>
+            )}
+            {isOfficer && !selectedEvent && !eventsLoading && (
+              <div className="mt-4">
+                <p className="text-sm text-destructive">
+                  No event found for your PIN. Please contact your supervisor.
+                </p>
+              </div>
+            )}
           </CardHeader>
         </Card>
       </motion.div>
@@ -345,9 +475,17 @@ const Scanner = () => {
                           {scanResult.student && (
                             <div className="space-y-2 text-left bg-card p-4 rounded-lg border border-border">
                               <p className="font-bold text-lg">{scanResult.student.name}</p>
-                              <p className="text-sm text-muted-foreground">{scanResult.student.studentId}</p>
+                              <p className="text-sm text-muted-foreground">{scanResult.student.studentId.replace(/^STU-/, '')}</p>
                               <p className="text-sm text-muted-foreground">{scanResult.student.department}</p>
                               <p className="text-sm text-muted-foreground">{scanResult.student.program}</p>
+                              {scanResult.timestamp && (
+                                <div className="pt-2 mt-2 border-t border-border">
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>{scanResult.timestamp}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </>
@@ -456,16 +594,16 @@ const Scanner = () => {
                 <Button
                   onClick={startScanning}
                   className="w-full bg-gradient-scan hover:opacity-90 transition-opacity shadow-glow text-lg py-6"
-                  disabled={!activeEvent}
+                  disabled={!selectedEvent}
                 >
                   <Camera className="mr-2 h-5 w-5" />
                   Start Scanning
                 </Button>
               )}
 
-              {!activeEvent && !eventLoading && (
+              {!selectedEvent && !eventsLoading && (
                 <p className="text-sm text-destructive text-center">
-                  No active event. Please activate an event first in the Events page.
+                  Please select an event above to start scanning.
                 </p>
               )}
             </div>

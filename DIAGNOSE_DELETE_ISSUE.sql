@@ -93,3 +93,4 @@ FROM information_schema.routine_privileges
 WHERE routine_schema = 'public'
 AND routine_name = 'delete_officer_role';
 
+

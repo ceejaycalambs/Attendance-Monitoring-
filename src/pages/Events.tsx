@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { CalendarPlus, Calendar, Play, CheckCircle, Clock, History } from "lucide-react";
+import { CalendarPlus, Calendar, Play, CheckCircle, Clock, History, MoreVertical, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEvents, useCreateEvent, useUpdateEventStatus, Event } from "@/hooks/useEvents";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useEvents, useCreateEvent, useUpdateEventStatus, useUpdateEvent, useDeleteEvent, Event } from "@/hooks/useEvents";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { mergeSort } from "@/utils/algorithms/Sorting";
+import { useQuery } from "@tanstack/react-query";
 
 const statusConfig: Record<Event["status"], { label: string; icon: React.ElementType; variant: "default" | "secondary" | "outline" }> = {
   active: { label: "Active", icon: Play, variant: "default" },
@@ -20,9 +25,20 @@ const statusConfig: Record<Event["status"], { label: string; icon: React.Element
 };
 
 const Events = () => {
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "super_admin";
+  
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [formData, setFormData] = useState({
+    name: "",
+    date: "",
+    status: "scheduled" as Event["status"],
+  });
+  const [editFormData, setEditFormData] = useState({
     name: "",
     date: "",
     status: "scheduled" as Event["status"],
@@ -31,6 +47,44 @@ const Events = () => {
   const { data: events, isLoading } = useEvents();
   const createEvent = useCreateEvent();
   const updateStatus = useUpdateEventStatus();
+  const updateEvent = useUpdateEvent();
+  const deleteEvent = useDeleteEvent();
+
+  // Fetch all attendance records to calculate unique attendees per event
+  const { data: allAttendanceRecords = [] } = useQuery({
+    queryKey: ["all-attendance"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("attendance_records")
+        .select("event_id, student_id");
+      
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Calculate unique attendees per event
+  const eventAttendeeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    
+    // Group by event_id and count unique student_ids
+    allAttendanceRecords.forEach((record) => {
+      if (!record.event_id || !record.student_id) return;
+      
+      if (!counts[record.event_id]) {
+        counts[record.event_id] = new Set();
+      }
+      (counts[record.event_id] as any).add(record.student_id);
+    });
+    
+    // Convert Sets to counts
+    const result: Record<string, number> = {};
+    Object.keys(counts).forEach((eventId) => {
+      result[eventId] = (counts[eventId] as Set<string>).size;
+    });
+    
+    return result;
+  }, [allAttendanceRecords]);
 
   // Sort events by date using merge sort (O(n log n))
   const sortedEvents = useMemo(() => {
@@ -59,6 +113,43 @@ const Events = () => {
 
   const handleStatusChange = async (eventId: string, newStatus: Event["status"]) => {
     await updateStatus.mutateAsync({ id: eventId, status: newStatus });
+  };
+
+  const handleEditClick = (event: Event) => {
+    setSelectedEvent(event);
+    // Format date for input (handle both ISO datetime and date-only formats)
+    const dateValue = event.date.includes("T") ? event.date.split("T")[0] : event.date;
+    setEditFormData({
+      name: event.name,
+      date: dateValue,
+      status: event.status,
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEvent) return;
+    await updateEvent.mutateAsync({
+      id: selectedEvent.id,
+      name: editFormData.name,
+      date: editFormData.date,
+      status: editFormData.status,
+    });
+    setEditOpen(false);
+    setSelectedEvent(null);
+  };
+
+  const handleDeleteClick = (event: Event) => {
+    setSelectedEvent(event);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedEvent) return;
+    await deleteEvent.mutateAsync(selectedEvent.id);
+    setDeleteDialogOpen(false);
+    setSelectedEvent(null);
   };
 
   return (
@@ -214,10 +305,10 @@ const Events = () => {
                                 {format(new Date(event.date), "MMMM d, yyyy")}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {event.total_attendees} attendees
+                                {eventAttendeeCounts[event.id] || 0} attendees
                               </p>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center">
                               {event.status === "scheduled" && (
                                 <Button
                                   size="sm"
@@ -239,6 +330,32 @@ const Events = () => {
                                   Complete
                                 </Button>
                               )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEditClick(event)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  {isSuperAdmin && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleDeleteClick(event)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </CardContent>
@@ -253,6 +370,93 @@ const Events = () => {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Event</DialogTitle>
+            <DialogDescription>
+              Update the event details below.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Event Name</Label>
+              <Input
+                id="edit-name"
+                placeholder="ROTC Field Training"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-date">Event Date</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={editFormData.date}
+                onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Status</Label>
+              <Select
+                value={editFormData.status}
+                onValueChange={(value: Event["status"]) => setEditFormData({ ...editFormData, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateEvent.isPending}
+              >
+                {updateEvent.isPending ? "Updating..." : "Update Event"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedEvent?.name}"? This action cannot be undone and will also delete all associated attendance records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteEvent.isPending}
+            >
+              {deleteEvent.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

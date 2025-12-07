@@ -144,10 +144,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (data) {
+      // Get event_id from PIN
+      const { data: eventId, error: eventError } = await supabase.rpc("get_event_from_pin", {
+        _pin: pin,
+        _role: role
+      });
+
       // Store PIN session in sessionStorage (temporary for scanning session)
       sessionStorage.setItem("officerEmail", email);
       sessionStorage.setItem("officerPin", pin);
       sessionStorage.setItem("officerRole", role);
+      
+      // Store event_id if available
+      if (eventId && !eventError) {
+        sessionStorage.setItem("officerEventId", eventId);
+      }
+
       return { success: true };
     }
 
@@ -159,6 +171,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     sessionStorage.removeItem("officerEmail");
     sessionStorage.removeItem("officerPin");
     sessionStorage.removeItem("officerRole");
+    sessionStorage.removeItem("officerEventId");
     navigate("/");
   };
 
