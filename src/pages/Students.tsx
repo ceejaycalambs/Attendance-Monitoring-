@@ -17,21 +17,46 @@ import QRCodeLib from "qrcode";
 import { toast } from "sonner";
 
 const DEPARTMENTS = [
-  "Engineering",
-  "Arts & Sciences",
-  "Business",
-  "Education",
-  "Nursing",
-  "Architecture",
+  "COE - College of Engineering",
+  "CCIS - College of Computing and Information Sciences",
+  "College of Arts and Sciences",
+  "College of Teacher Education",
+  "College of Business and Technology",
 ];
 
 const PROGRAMS: Record<string, string[]> = {
-  Engineering: ["Computer Science", "Civil Engineering", "Electrical Engineering", "Mechanical Engineering"],
-  "Arts & Sciences": ["Biology", "Psychology", "Chemistry", "Mathematics"],
-  Business: ["Accountancy", "Marketing", "Management", "Finance"],
-  Education: ["Elementary Education", "Secondary Education", "Special Education"],
-  Nursing: ["Bachelor of Science in Nursing"],
-  Architecture: ["Bachelor of Science in Architecture"],
+  "COE - College of Engineering": [
+    "BS Civil Engineering",
+    "BS Electronics Engineering",
+    "BS Electrical Engineering",
+    "BS Computer Engineering",
+  ],
+  "CCIS - College of Computing and Information Sciences": [
+    "BS Computer Science",
+    "BS Information Technology",
+    "BS Information System",
+  ],
+  "College of Arts and Sciences": [
+    "BS Environmental Science",
+    "BS Mathematics",
+    "Bachelor of Arts in English Language",
+  ],
+  "College of Teacher Education": [
+    "Bachelor of Elementary Education",
+    "BSED - English",
+    "BSED - Mathematics",
+    "BSED - Filipino",
+    "BSED - Sciences",
+    "Bachelor of Physical Education",
+  ],
+  "College of Business and Technology": [
+    "BS Hospitality and Management",
+    "BS Tourism Management",
+    "Bachelor in Electrical Engineering Technology",
+    "Bachelor in Electronics Engineering Technology",
+    "Bachelor of Automotive Engineering Technology",
+    "BS Industrial Technology - ADT",
+  ],
 };
 
 const Students = () => {
